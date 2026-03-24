@@ -40,8 +40,7 @@
     * `expo-av`: 用于应用内的音频试听与播放。
     * `expo-haptics`: 闹钟触发时配合震动反馈，强化唤醒效果。
 * **AI 服务接入：**
-    * **LLM:** OpenAI `GPT-4o-mini` 或 Anthropic `Claude 3 Haiku` (低成本，响应极快)。
-    * **TTS:** OpenAI `TTS-1` 模型 (推荐 `onyx` 沉稳男声或 `nova` 活力女声)。
+    * **LLM + TTS:** Google **Gemini 2.5 Flash** — 一个 API 同时完成文案生成和语音合成（多模态音频输出），成本低、响应快。
 * **API 代理服务：** **Cloudflare Worker / Vercel Edge Function** (详见 §5 说明)。
 
 ## 4. 核心亮点：AI Prompt 设计 (The "Soul")
@@ -73,14 +72,13 @@
 ## 5. API 代理服务设计 (Security Layer)
 
 ### 为什么需要代理服务？
-如果 App 直接携带 OpenAI API Key 调用接口，一旦上架 App Store：
-- API Key **必定被逆向提取**（iOS IPA 解包 → strings 搜索即可）
+如果 App 直接携带 Gemini API Key 调用接口，一旦上架应用商店：
+- API Key **必定被逆向提取**（APK 解包 → strings 搜索即可）
 - 任何人拿到 Key 后可无限调用，导致 **账单失控**
-- 违反 OpenAI 使用条款，可能导致 Key 被封禁
 
 ### 架构设计
 ```
-Client App → Edge Function（身份验证 + 请求限流）→ OpenAI API
+Client App → Edge Function（身份验证 + 请求限流）→ Gemini API
 ```
 
 ### 实现方案（≤50 行代码）
