@@ -5,12 +5,14 @@ import { Platform } from 'react-native';
 Notifications.setNotificationHandler({
   handleNotification: async () => ({
     shouldShowAlert: true,
-    shouldPlaySound: true,
+    shouldPlaySound: false, // Mute generic system beep if app is ACTIVE!
     shouldSetBadge: false,
+    shouldShowBanner: true,
+    shouldShowList: true,
   }),
 });
 
-const ALARM_CHANNEL_ID = 'alarm-channel';
+const ALARM_CHANNEL_ID = 'alarm-channel-v2';
 
 /**
  * Initialize notification settings.
@@ -41,6 +43,35 @@ export async function requestPermissions(): Promise<boolean> {
 
   const { status } = await Notifications.requestPermissionsAsync();
   return status === 'granted';
+}
+
+/**
+ * Check if the user has manually muted the alarm channel in Android system settings.
+ * Returns true if sound is enabled, false if silenced.
+ */
+export async function checkAlarmSoundEnabled(): Promise<boolean> {
+  if (Platform.OS !== 'android') return true;
+
+  const channel = await Notifications.getNotificationChannelAsync(ALARM_CHANNEL_ID);
+  if (!channel) return false;
+  
+  // MIN=1, LOW=2 are silent. DEFAULT=3 or higher has sound.
+  if (channel.importance < Notifications.AndroidImportance.DEFAULT) {
+    return false;
+  }
+
+  // Handle various runtime representations of the "Silent" sound option across Android devices
+  const soundStr = String(channel.sound).toLowerCase();
+  if (
+    channel.sound === null ||
+    soundStr === 'none' ||
+    soundStr === 'null' ||
+    soundStr === 'false'
+  ) {
+    return false;
+  }
+
+  return true;
 }
 
 /**
@@ -75,6 +106,7 @@ export async function scheduleAlarm(time: Date): Promise<string> {
     trigger: {
       type: Notifications.SchedulableTriggerInputTypes.TIME_INTERVAL,
       seconds: secondsUntilAlarm,
+      channelId: ALARM_CHANNEL_ID,
     },
   });
 

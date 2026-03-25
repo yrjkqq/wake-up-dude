@@ -1,10 +1,11 @@
 import React, { useState, useCallback, useMemo, useEffect } from 'react';
-import { StyleSheet, View, Platform, Alert } from 'react-native';
+import { StyleSheet, View, Platform, Alert, Linking, TouchableOpacity, ScrollView, ActivityIndicator } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import DateTimePicker, { DateTimePickerEvent } from '@react-native-community/datetimepicker';
+import DatePicker from '@/components/time-picker';
 import Animated, { FadeIn, FadeOut } from 'react-native-reanimated';
 
 import { AlarmButton } from '@/components/alarm-button';
+import SwipeToStop from '@/components/SwipeToStop';
 import { ThemedText } from '@/components/themed-text';
 import { Colors, Fonts, Spacing } from '@/constants/theme';
 import { useColorScheme } from '@/hooks/use-color-scheme';
@@ -13,11 +14,18 @@ import {
   requestPermissions,
   scheduleAlarm,
   cancelAllAlarms,
+  checkAlarmSoundEnabled,
 } from '@/services/notification-service';
+import { generateAlarmAudio, checkHasLatestAlarm } from '@/services/ai-service';
+import * as Notifications from 'expo-notifications';
+import { Audio } from 'expo-av';
+import * as FileSystem from 'expo-file-system/legacy';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
 function padZero(n: number): string {
   return n.toString().padStart(2, '0');
 }
+
 
 export default function AlarmScreen() {
   const colorScheme = useColorScheme() ?? 'light';
@@ -26,12 +34,17 @@ export default function AlarmScreen() {
   // Default alarm time: 08:00
   const [alarmTime, setAlarmTime] = useState(() => {
     const d = new Date();
-    d.setHours(8, 0, 0, 0);
+    d.setMinutes(d.getMinutes() + 1);
+    d.setSeconds(0, 0);
     return d;
   });
   const [isAlarmActive, setIsAlarmActive] = useState(false);
-  const [showPicker, setShowPicker] = useState(Platform.OS === 'ios');
+  const [isGenerating, setIsGenerating] = useState(false);
   const [statusMessage, setStatusMessage] = useState('');
+  const [isPlayingPreview, setIsPlayingPreview] = useState(false);
+  const [activeWaitModel, setActiveWaitModel] = useState('Gemini 3.1 Pro');
+  
+  const soundRef = React.useRef<Audio.Sound | null>(null);
 
   const timeString = useMemo(() => {
     return `${padZero(alarmTime.getHours())}:${padZero(alarmTime.getMinutes())}`;
@@ -39,37 +52,139 @@ export default function AlarmScreen() {
 
   // Initialize notifications on mount
   useEffect(() => {
-    initNotifications();
+    async function setup() {
+      await initNotifications();
+      // Request system permissions directly on startup
+      await requestPermissions();
+      
+      // Setup audio session
+      await Audio.setAudioModeAsync({
+        playsInSilentModeIOS: true,
+        staysActiveInBackground: true,
+      });
+    }
+    setup();
   }, []);
 
-  const handleTimeChange = useCallback(
-    (_event: DateTimePickerEvent, selectedDate?: Date) => {
-      if (Platform.OS === 'android') {
-        setShowPicker(false);
+  const playAlarmAudio = useCallback(async (isRealAlarm = false) => {
+    try {
+      const uri = await checkHasLatestAlarm();
+      let playUri = uri;
+      
+      if (!uri) {
+        const fallbackSet = await AsyncStorage.getItem('LATEST_ALARM_FILE_URI');
+        if (fallbackSet === 'fallback') {
+           playUri = 'fallback';
+        } else {
+           Alert.alert('Play Error', '未找到之前生成的 AI 闹钟缓存录音，并且无离线兜底可用！');
+           return;
+        }
       }
-      if (selectedDate) {
-        setAlarmTime(selectedDate);
+      
+      let soundToPlay;
+      if (playUri === 'fallback') {
+        const { sound } = await Audio.Sound.createAsync(require('@/assets/sounds/test_alarm.wav'));
+        soundToPlay = sound;
+      } else {
+        const tempUri = FileSystem.cacheDirectory + `temp_play_${Date.now()}.wav`;
+        await FileSystem.copyAsync({ from: playUri as string, to: tempUri });
+        const { sound } = await Audio.Sound.createAsync({ uri: tempUri });
+        soundToPlay = sound;
       }
-    },
-    [],
-  );
+      
+      soundToPlay.setOnPlaybackStatusUpdate((status) => {
+        if (status.isLoaded && status.didJustFinish) {
+          setIsPlayingPreview(false);
+        }
+      });
+      
+      soundRef.current = soundToPlay;
+      setIsPlayingPreview(true);
+      await soundToPlay.setIsLoopingAsync(isRealAlarm === true);
+      await soundToPlay.playAsync();
+    } catch (e) {
+      console.error('Audio playback failed', e);
+      Alert.alert('播放器抛出底层异常', String(e));
+      setIsPlayingPreview(false);
+    }
+  }, []);
+
+  const stopAudio = useCallback(async () => {
+    setIsPlayingPreview(false);
+    if (soundRef.current) {
+      await soundRef.current.stopAsync();
+      await soundRef.current.unloadAsync();
+      soundRef.current = null;
+    }
+  }, []);
+
+  useEffect(() => {
+    // When notification arrives while app is in foreground
+    const foregroundSub = Notifications.addNotificationReceivedListener(notification => {
+       playAlarmAudio(true);
+       setStatusMessage('🔔 闹钟正在响，右滑底栏彻底关闭！');
+    });
+
+    // When notification is tapped by the user (or in background)
+    const responseSub = Notifications.addNotificationResponseReceivedListener(response => {
+       playAlarmAudio(true);
+       setStatusMessage('🔔 闹钟正在响，右滑底栏彻底关闭！');
+    });
+    return () => {
+      foregroundSub.remove();
+      responseSub.remove();
+    };
+  }, [playAlarmAudio]);
 
   const toggleAlarm = useCallback(async () => {
-    if (isAlarmActive) {
+    if (isAlarmActive || isGenerating) {
       // Cancel alarm
       await cancelAllAlarms();
       setIsAlarmActive(false);
       setStatusMessage('');
+      stopAudio();
     } else {
-      // Request permissions first
+      // Verify permissions (if they denied the prompt on startup, this will be false)
       const granted = await requestPermissions();
       if (!granted) {
-        Alert.alert('权限不足', '需要通知权限才能设定闹钟，请在设置中开启。');
+        Alert.alert(
+          '权限不足',
+          '需要通知权限才能设定闹钟，请在系统设置中开启。',
+          [
+            { text: '取消', style: 'cancel' },
+            { text: '去设置', onPress: () => Linking.openSettings() },
+          ]
+        );
         return;
       }
 
-      // Schedule alarm
+      // Check if channel sound is explicitly disabled
+      const soundEnabled = await checkAlarmSoundEnabled();
+      if (!soundEnabled) {
+        Alert.alert(
+          '闹钟已被静音',
+          '检测到系统通知设置中禁用了闹钟声音。为了能叫醒你，请点击"去设置" -> "通知" -> 找到 "Alarm" 类别，将其设为允许发出声音并提高重要度。',
+          [
+            { text: '取消', style: 'cancel' },
+            { text: '去设置', onPress: () => Linking.openSettings() },
+          ]
+        );
+        return;
+      }
+
+      const textModel = await AsyncStorage.getItem('SETTINGS_TEXT_MODEL') || 'gemini-3.1-pro-preview';
+      setActiveWaitModel(textModel);
+
+      setIsGenerating(true);
+      setStatusMessage('🧠 AI 正在构思叫醒语音...');
+
+      // Schedule alarm and generate audio
       try {
+        // 1. Generate Voice
+        const activePersona = await AsyncStorage.getItem('SETTINGS_PERSONA') || '🌸 温柔女友';
+        const result = await generateAlarmAudio(timeString, activePersona);
+        
+        // 2. Schedule OS Notification (plays generic sound in background)
         await scheduleAlarm(alarmTime);
         setIsAlarmActive(true);
 
@@ -82,16 +197,37 @@ export default function AlarmScreen() {
         const diffMs = target.getTime() - now.getTime();
         const diffH = Math.floor(diffMs / 3600000);
         const diffM = Math.floor((diffMs % 3600000) / 60000);
-        setStatusMessage(`${diffH}小时${diffM}分钟后响铃`);
+        setStatusMessage(`✅ ${diffH}小时${diffM}分钟后响铃\n\n"${result.text}"`);
       } catch (error) {
         console.error('Failed to schedule alarm:', error);
-        Alert.alert('设定失败', '闹钟设定出现问题，请重试。');
+        
+        // --- OFFLINE FALLBACK ---
+        // Force the app to use the bundled local wav file
+        await AsyncStorage.setItem('LATEST_ALARM_FILE_URI', 'fallback');
+        await scheduleAlarm(alarmTime);
+        setIsAlarmActive(true);
+
+        const now = new Date();
+        let target = new Date(alarmTime);
+        if (target <= now) target.setDate(target.getDate() + 1);
+        const diffMs = target.getTime() - now.getTime();
+        const diffH = Math.floor(diffMs / 3600000);
+        const diffM = Math.floor((diffMs % 3600000) / 60000);
+        
+        setStatusMessage(`⚠️ 离线模式\nAI 生成失败，已启用物理震铃兜底。\n✅ ${diffH}小时${diffM}分后保证响铃`);
+      } finally {
+        setIsGenerating(false);
       }
     }
-  }, [isAlarmActive, alarmTime]);
+  }, [isAlarmActive, isGenerating, alarmTime, timeString, stopAudio]);
 
   return (
-    <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]}>
+    <SafeAreaView style={{ flex: 1, backgroundColor: colors.background }}>
+      <ScrollView
+        style={{ flex: 1, width: '100%' }}
+        contentContainerStyle={styles.scrollContainer}
+        showsVerticalScrollIndicator={false}
+      >
       {/* Header */}
       <View style={styles.header}>
         <ThemedText style={[styles.appTitle, { color: colors.tint }]}>
@@ -104,33 +240,38 @@ export default function AlarmScreen() {
 
       {/* Time Display */}
       <View style={[styles.timeCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
-        {Platform.OS !== 'ios' && (
-          <ThemedText
-            style={[styles.timeDisplay, { color: colors.text, fontFamily: Fonts?.mono }]}
-            onPress={() => !isAlarmActive && setShowPicker(true)}>
+        {!isAlarmActive ? (
+          // @ts-ignore
+          <DatePicker
+            date={alarmTime}
+            mode="time"
+            onDateChange={setAlarmTime}
+            textColor={colors.text}
+            fadeToColor="none"
+            locale="zh-CN"
+            androidVariant="iosClone"
+          />
+        ) : (
+          <ThemedText style={[styles.timeDisplay, { color: colors.text, fontFamily: Fonts?.mono }]}>
             {timeString}
           </ThemedText>
         )}
 
-        {/* DateTimePicker */}
-        {showPicker && (
-          <DateTimePicker
-            value={alarmTime}
-            mode="time"
-            display={Platform.OS === 'ios' ? 'spinner' : 'default'}
-            onChange={handleTimeChange}
-            textColor={colors.text}
-            disabled={isAlarmActive}
-            locale="zh-CN"
-            style={Platform.OS === 'ios' ? styles.iosPicker : undefined}
-          />
-        )}
-
-        {isAlarmActive && (
+        {(isAlarmActive || isGenerating) && (
           <Animated.View entering={FadeIn.duration(400)} exiting={FadeOut.duration(300)}>
-            <ThemedText style={[styles.activeHint, { color: colors.success }]}>
-              ✅ 闹钟将在 {timeString} 响起
-            </ThemedText>
+            {isAlarmActive && !isGenerating && (
+              <ThemedText style={[styles.activeHint, { color: colors.success }]}>
+                ✅ 闹钟将在 {timeString} 响起
+              </ThemedText>
+            )}
+            {isGenerating && (
+              <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center', marginBottom: 12 }}>
+                <ActivityIndicator size="small" color={colors.tint} style={{ marginRight: 8 }} />
+                <ThemedText style={{ color: colors.tint, fontSize: 16, fontWeight: '600' }}>
+                  🧠 正在连接 {activeWaitModel}...
+                </ThemedText>
+              </View>
+            )}
             {statusMessage !== '' && (
               <ThemedText style={[styles.countdownHint, { color: colors.textSecondary }]}>
                 {statusMessage}
@@ -140,9 +281,31 @@ export default function AlarmScreen() {
         )}
       </View>
 
-      {/* Alarm Button */}
+      {/* UI spacing gap placeholder to separate components */}
+      <View style={{ height: Spacing.xl }} />
+
+      {/* Preview Voice Button */}
+      {isAlarmActive && !isGenerating && statusMessage !== '' && (
+        <View style={{ width: '100%', alignItems: 'center', marginBottom: Spacing.xl }}>
+          <TouchableOpacity 
+            onPress={isPlayingPreview ? stopAudio : () => playAlarmAudio(false)} 
+            activeOpacity={0.7} 
+            style={{ padding: Spacing.sm }}
+          >
+            <ThemedText style={{ color: colors.tint, fontSize: 16, textDecorationLine: 'underline' }}>
+              {isPlayingPreview ? '⏹ 停止播放' : '🎧 抢先试听生成的专属语音'}
+            </ThemedText>
+          </TouchableOpacity>
+        </View>
+      )}
+
+      {/* Alarm Button / Swipe Stop */}
       <View style={styles.buttonArea}>
-        <AlarmButton isActive={isAlarmActive} onPress={toggleAlarm} />
+        {isAlarmActive ? (
+          <SwipeToStop onStop={toggleAlarm} />
+        ) : (
+          <AlarmButton isActive={false} onPress={toggleAlarm} />
+        )}
       </View>
 
       {/* Footer hint */}
@@ -151,16 +314,27 @@ export default function AlarmScreen() {
           ? '💤 安心入睡吧，AI 已经准备好叫醒你了'
           : '💡 设定时间后点击开启，AI 会为你生成专属叫醒语音'}
       </ThemedText>
+
+      {/* System Settings Link for Android */}
+      {Platform.OS === 'android' && (
+        <TouchableOpacity style={styles.settingsLink} onPress={() => Linking.openSettings()}>
+          <ThemedText style={[styles.settingsText, { color: colors.textSecondary }]}>
+            🔕 闹钟没声音？去系统设置检查通知权限
+          </ThemedText>
+        </TouchableOpacity>
+      )}
+      </ScrollView>
     </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
+  scrollContainer: {
     paddingTop: Spacing.xl,
     paddingHorizontal: Spacing.lg,
+    paddingBottom: Spacing.xxl * 2,
     alignItems: 'center',
+    flexGrow: 1,
   },
   header: {
     alignItems: 'center',
@@ -196,6 +370,8 @@ const styles = StyleSheet.create({
     fontWeight: '200',
     letterSpacing: 4,
     marginBottom: Spacing.md,
+    lineHeight: 84,
+    includeFontPadding: false,
   },
   iosPicker: {
     height: 180,
@@ -223,5 +399,32 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     lineHeight: 22,
     paddingHorizontal: Spacing.lg,
+  },
+  settingsLink: {
+    marginTop: Spacing.xl,
+    padding: Spacing.sm,
+  },
+  settingsText: {
+    fontSize: 13,
+    textDecorationLine: 'underline',
+    textAlign: 'center',
+    opacity: 0.8,
+  },
+  personaContainer: {
+    width: '100%',
+    alignItems: 'center',
+    marginBottom: Spacing.xl,
+  },
+  personaRow: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    flexWrap: 'wrap',
+    gap: Spacing.sm,
+  },
+  personaChip: {
+    paddingHorizontal: Spacing.md,
+    paddingVertical: Spacing.sm,
+    borderRadius: 20,
+    borderWidth: 1,
   },
 });
