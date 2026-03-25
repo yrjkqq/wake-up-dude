@@ -25,7 +25,7 @@
 ## 📥 下载安装 (Download)
 本项目当前提供生产级的 `Android APK` 安装包！完全脱离开发者模式，纯享沉浸式的唤醒体验。
 
-👉 **[点击这里跳转至 Releases 页面下载最新 APK](https://github.com/YOUR-GITHUB-NAME/wake-up-dude/releases)**
+👉 **[点击这里跳转至 Releases 页面下载最新 APK](https://github.com/yrjkqq/wake-up-dude/releases)**
 
 *(由于 iOS App Store 的变态级封闭，iPhone 用户需自行克隆代码借用 Xcode 或 EAS 自签真机跑)*
 
@@ -40,7 +40,7 @@
 
 ```bash
 # 1. 克隆这堆疯狂的代码
-git clone https://github.com/YOUR-GITHUB-NAME/wake-up-dude.git
+git clone https://github.com/yrjkqq/wake-up-dude.git
 
 # 2. 安装前端重炮依赖
 npm install
