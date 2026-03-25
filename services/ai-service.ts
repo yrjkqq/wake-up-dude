@@ -1,6 +1,4 @@
 import * as FileSystem from 'expo-file-system/legacy';
-import { Platform } from 'react-native';
-import Constants from 'expo-constants';
 import { saveAlarmToHistory } from './database';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
@@ -16,13 +14,8 @@ export async function generateAlarmAudio(
 
   let apiUrl = process.env.EXPO_PUBLIC_API_URL;
   if (!apiUrl) {
-    let host = 'localhost:8081';
-    if (Constants.expoConfig?.hostUri) {
-      host = Constants.expoConfig.hostUri;
-    } else if (Platform.OS === 'android') {
-      host = '192.168.0.105:8081';
-    }
-    apiUrl = `http://${host}/api/gen-alarm`;
+    // Production Fallback to Cloudflare globally distributed Edge Worker
+    apiUrl = 'https://wake-up-dude-api.wake-up-dude-api.workers.dev';
   }
 
   console.log('[AI Service] Requesting payload from API Server:', apiUrl, 'TextModel:', textModel);

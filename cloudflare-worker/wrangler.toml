@@ -1,0 +1,10 @@
+name = "wake-up-dude-api"
+main = "src/index.ts"
+compatibility_date = "2024-03-20"
+compatibility_flags = ["nodejs_compat"]
+
+# This binds the global KV instance for rate-limiting
+[[kv_namespaces]]
+binding = "WAKE_UP_DUDE_KV"
+# WARNING: REPLACE THIS WITH YOUR REAL LOCAL/PROD BINDING ID AFTER RUNNING WRANGLER
+id = "0efb54695bd744f7a17a1eac0062b435"
