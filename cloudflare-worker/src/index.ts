@@ -30,10 +30,10 @@ export default {
       const kvKey = `rate_limit_${ip}_${date}`;
       
       let count = parseInt((await env.WAKE_UP_DUDE_KV.get(kvKey)) || "0", 10);
-      if (count >= 3) {
+      if (count >= 100) {
         return new Response(JSON.stringify({ 
           success: false, 
-          error: "Daily limit exceeded! Free tier allows 3 generations per day to protect server costs." 
+          error: "Daily limit exceeded! Free tier allows 100 generations per day to protect server costs." 
         }), { status: 429, headers: { ...corsHeaders, "Content-Type": "application/json" } });
       }
 
