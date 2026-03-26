@@ -10,7 +10,7 @@
  * in the app entry point (_layout.tsx).
  */
 import React, { useEffect, useRef, useState, useCallback } from 'react';
-import { View, StyleSheet, StatusBar, AppRegistry } from 'react-native';
+import { View, StyleSheet, StatusBar, TouchableOpacity } from 'react-native';
 import { Audio } from 'expo-av';
 import * as FileSystem from 'expo-file-system/legacy';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -20,7 +20,11 @@ import SwipeToStop from '@/components/SwipeToStop';
 import { ThemedText } from '@/components/themed-text';
 import { LATEST_ALARM_KEY } from '@/services/ai-service';
 
-function AlarmScreenComponent() {
+interface Props {
+  onClose?: () => void;
+}
+
+function AlarmScreenComponent({ onClose }: Props) {
   const soundRef = useRef<Audio.Sound | null>(null);
   const [currentTime, setCurrentTime] = useState('');
   const [isStopped, setIsStopped] = useState(false);
@@ -44,33 +48,28 @@ function AlarmScreenComponent() {
 
     (async () => {
       try {
-        // Configure audio session
         await Audio.setAudioModeAsync({
           playsInSilentModeIOS: true,
           staysActiveInBackground: true,
         });
 
-        // Find the latest AI audio
         const uri = await AsyncStorage.getItem(LATEST_ALARM_KEY);
         let soundToPlay: Audio.Sound;
 
         if (uri && uri !== 'fallback') {
           const info = await FileSystem.getInfoAsync(uri);
           if (info.exists) {
-            // Copy to temp to avoid file locking issues
             const tempUri = FileSystem.cacheDirectory + `alarm_play_${Date.now()}.wav`;
             await FileSystem.copyAsync({ from: uri, to: tempUri });
             const { sound } = await Audio.Sound.createAsync({ uri: tempUri });
             soundToPlay = sound;
           } else {
-            // AI file missing, use fallback
             const { sound } = await Audio.Sound.createAsync(
               require('@/assets/sounds/test_alarm.wav')
             );
             soundToPlay = sound;
           }
         } else {
-          // No AI audio or explicit fallback
           const { sound } = await Audio.Sound.createAsync(
             require('@/assets/sounds/test_alarm.wav')
           );
@@ -102,8 +101,6 @@ function AlarmScreenComponent() {
 
   const handleStop = useCallback(async () => {
     setIsStopped(true);
-
-    // Stop audio
     if (soundRef.current) {
       try {
         await soundRef.current.stopAsync();
@@ -111,8 +108,6 @@ function AlarmScreenComponent() {
       } catch {}
       soundRef.current = null;
     }
-
-    // Cancel the ongoing notification
     await notifee.cancelAllNotifications();
   }, []);
 
@@ -121,12 +116,13 @@ function AlarmScreenComponent() {
       <View style={[styles.container, styles.stoppedContainer]}>
         <StatusBar barStyle="light-content" backgroundColor="#1a1a2e" />
         <ThemedText style={styles.stoppedEmoji}>☀️</ThemedText>
-        <ThemedText style={styles.stoppedText}>
-          早安！新的一天开始了
-        </ThemedText>
-        <ThemedText style={styles.stoppedSubtext}>
-          闹钟已关闭，祝你今天过得精彩
-        </ThemedText>
+        <ThemedText style={styles.stoppedText}>早安！新的一天开始了</ThemedText>
+        <ThemedText style={styles.stoppedSubtext}>闹钟已关闭，祝你今天过得精彩</ThemedText>
+        {onClose && (
+          <TouchableOpacity style={styles.closeBtn} onPress={onClose}>
+            <ThemedText style={styles.closeBtnText}>进入应用</ThemedText>
+          </TouchableOpacity>
+        )}
       </View>
     );
   }
@@ -213,10 +209,19 @@ const styles = StyleSheet.create({
   stoppedSubtext: {
     fontSize: 16,
     color: 'rgba(255,255,255,0.5)',
+    marginBottom: 40,
+  },
+  closeBtn: {
+    paddingHorizontal: 32,
+    paddingVertical: 12,
+    backgroundColor: 'rgba(255,255,255,0.1)',
+    borderRadius: 24,
+  },
+  closeBtnText: {
+    color: '#ffffff',
+    fontSize: 16,
+    fontWeight: '600',
   },
 });
-
-// Register as a Notifee fullScreenAction mainComponent
-AppRegistry.registerComponent('alarm-screen', () => AlarmScreenComponent);
 
 export default AlarmScreenComponent;

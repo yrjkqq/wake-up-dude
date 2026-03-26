@@ -1,5 +1,5 @@
-import React, { useState, useCallback, useMemo, useEffect } from 'react';
-import { StyleSheet, View, Platform, Alert, Linking, TouchableOpacity, ScrollView, ActivityIndicator } from 'react-native';
+import React, { useState, useCallback, useMemo, useEffect, useRef } from 'react';
+import { StyleSheet, View, Platform, Alert, Linking, TouchableOpacity, ScrollView, ActivityIndicator, AppState, AppStateStatus } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import DatePicker from '@/components/time-picker';
 import Animated, { FadeIn, FadeOut } from 'react-native-reanimated';
@@ -17,6 +17,7 @@ import {
   checkAlarmSoundEnabled,
   checkExactAlarmPermission,
   openAlarmSettings,
+  getScheduledAlarms,
 } from '@/services/notification-service';
 import { generateAlarmAudio, checkHasLatestAlarm } from '@/services/ai-service';
 import notifee, { EventType } from '@notifee/react-native';
@@ -120,24 +121,43 @@ export default function AlarmScreen() {
     }
   }, []);
 
-  // Notifee foreground event listener — handles alarm arriving while app is open
+
+
+  const isGeneratingRef = useRef(false);
+  const isAlarmActiveRef = useRef(false);
+
   useEffect(() => {
-    return notifee.onForegroundEvent(async ({ type, detail }) => {
-      if (type === EventType.DELIVERED) {
-        // Cancel the notification immediately to stop the channel's system sound —
-        // expo-av will play the AI audio instead
-        if (detail.notification?.id) {
-          await notifee.cancelNotification(detail.notification.id);
+    isGeneratingRef.current = isGenerating;
+    isAlarmActiveRef.current = isAlarmActive;
+  }, [isGenerating, isAlarmActive]);
+
+  useEffect(() => {
+    const checkScheduledState = async () => {
+      // Do not interrupt the UI if AI audio is currently generating
+      if (isGeneratingRef.current) return;
+      try {
+        const triggerIds = await getScheduledAlarms();
+        // If no alarms are scheduled in Notifee but our UI thinks there is one,
+        // it means the alarm has fired and we should reset the UI.
+        if (triggerIds.length === 0 && isAlarmActiveRef.current) {
+          setIsAlarmActive(false);
+          setStatusMessage('');
         }
-        playAlarmAudio(true);
-        setStatusMessage('🔔 闹钟正在响，右滑底栏彻底关闭！');
+      } catch (e) {
+        console.warn('Failed to sync scheduled alarms state', e);
       }
-      if (type === EventType.PRESS) {
-        playAlarmAudio(true);
-        setStatusMessage('🔔 闹钟正在响，右滑底栏彻底关闭！');
+    };
+
+    checkScheduledState();
+
+    const sub = AppState.addEventListener('change', (state: AppStateStatus) => {
+      if (state === 'active') {
+        checkScheduledState();
       }
     });
-  }, [playAlarmAudio]);
+
+    return () => sub.remove();
+  }, []);
 
   const toggleAlarm = useCallback(async () => {
     if (isAlarmActive || isGenerating) {
@@ -195,7 +215,7 @@ export default function AlarmScreen() {
       setActiveWaitModel(textModel);
 
       setIsGenerating(true);
-      setStatusMessage('🧠 AI 正在构思叫醒语音...');
+      setStatusMessage('🧠 AI 正在构思专属铃声\n⚠️ 生成期间请保持应用打开，请勿锁屏');
 
       // 1. Schedule alarm FIRST — guarantees it fires even if screen locks during AI generation
       await AsyncStorage.setItem('LATEST_ALARM_FILE_URI', 'fallback'); // default to fallback
