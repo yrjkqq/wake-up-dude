@@ -52,6 +52,7 @@
           ]
         }
       ],
+      "./plugins/notifee-plugin",
       "expo-sqlite"
     ],
     "experiments": {

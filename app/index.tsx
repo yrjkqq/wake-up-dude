@@ -15,9 +15,11 @@ import {
   scheduleAlarm,
   cancelAllAlarms,
   checkAlarmSoundEnabled,
+  checkExactAlarmPermission,
+  openAlarmSettings,
 } from '@/services/notification-service';
 import { generateAlarmAudio, checkHasLatestAlarm } from '@/services/ai-service';
-import * as Notifications from 'expo-notifications';
+import notifee, { EventType } from '@notifee/react-native';
 import { Audio } from 'expo-av';
 import * as FileSystem from 'expo-file-system/legacy';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -118,22 +120,23 @@ export default function AlarmScreen() {
     }
   }, []);
 
+  // Notifee foreground event listener — handles alarm arriving while app is open
   useEffect(() => {
-    // When notification arrives while app is in foreground
-    const foregroundSub = Notifications.addNotificationReceivedListener(notification => {
-       playAlarmAudio(true);
-       setStatusMessage('🔔 闹钟正在响，右滑底栏彻底关闭！');
+    return notifee.onForegroundEvent(async ({ type, detail }) => {
+      if (type === EventType.DELIVERED) {
+        // Cancel the notification immediately to stop the channel's system sound —
+        // expo-av will play the AI audio instead
+        if (detail.notification?.id) {
+          await notifee.cancelNotification(detail.notification.id);
+        }
+        playAlarmAudio(true);
+        setStatusMessage('🔔 闹钟正在响，右滑底栏彻底关闭！');
+      }
+      if (type === EventType.PRESS) {
+        playAlarmAudio(true);
+        setStatusMessage('🔔 闹钟正在响，右滑底栏彻底关闭！');
+      }
     });
-
-    // When notification is tapped by the user (or in background)
-    const responseSub = Notifications.addNotificationResponseReceivedListener(response => {
-       playAlarmAudio(true);
-       setStatusMessage('🔔 闹钟正在响，右滑底栏彻底关闭！');
-    });
-    return () => {
-      foregroundSub.remove();
-      responseSub.remove();
-    };
   }, [playAlarmAudio]);
 
   const toggleAlarm = useCallback(async () => {
@@ -144,7 +147,7 @@ export default function AlarmScreen() {
       setStatusMessage('');
       stopAudio();
     } else {
-      // Verify permissions (if they denied the prompt on startup, this will be false)
+      // Verify notification permissions
       const granted = await requestPermissions();
       if (!granted) {
         Alert.alert(
@@ -156,6 +159,22 @@ export default function AlarmScreen() {
           ]
         );
         return;
+      }
+
+      // Check exact alarm permission (Android 12+)
+      if (Platform.OS === 'android') {
+        const alarmAllowed = await checkExactAlarmPermission();
+        if (!alarmAllowed) {
+          Alert.alert(
+            '需要精确闹钟权限',
+            'Android 12+ 要求授权"精确闹钟"权限才能保证准时响铃。请在接下来的系统设置页面中开启此权限。',
+            [
+              { text: '取消', style: 'cancel' },
+              { text: '去设置', onPress: openAlarmSettings },
+            ]
+          );
+          return;
+        }
       }
 
       // Check if channel sound is explicitly disabled
@@ -178,43 +197,29 @@ export default function AlarmScreen() {
       setIsGenerating(true);
       setStatusMessage('🧠 AI 正在构思叫醒语音...');
 
-      // Schedule alarm and generate audio
+      // 1. Schedule alarm FIRST — guarantees it fires even if screen locks during AI generation
+      await AsyncStorage.setItem('LATEST_ALARM_FILE_URI', 'fallback'); // default to fallback
+      await scheduleAlarm(alarmTime);
+      setIsAlarmActive(true);
+
+      // Calculate time until alarm for display
+      const now = new Date();
+      let target = new Date(alarmTime);
+      if (target <= now) {
+        target.setDate(target.getDate() + 1);
+      }
+      const diffMs = target.getTime() - now.getTime();
+      const diffH = Math.floor(diffMs / 3600000);
+      const diffM = Math.floor((diffMs % 3600000) / 60000);
+
+      // 2. Then try to generate AI audio — if this fails, alarm still fires with fallback
       try {
-        // 1. Generate Voice
         const activePersona = await AsyncStorage.getItem('SETTINGS_PERSONA') || '🌸 温柔女友';
         const result = await generateAlarmAudio(timeString, activePersona);
-        
-        // 2. Schedule OS Notification (plays generic sound in background)
-        await scheduleAlarm(alarmTime);
-        setIsAlarmActive(true);
-
-        // Calculate time until alarm for display
-        const now = new Date();
-        let target = new Date(alarmTime);
-        if (target <= now) {
-          target.setDate(target.getDate() + 1);
-        }
-        const diffMs = target.getTime() - now.getTime();
-        const diffH = Math.floor(diffMs / 3600000);
-        const diffM = Math.floor((diffMs % 3600000) / 60000);
         setStatusMessage(`✅ ${diffH}小时${diffM}分钟后响铃\n\n"${result.text}"`);
       } catch (error) {
-        console.error('Failed to schedule alarm:', error);
-        
-        // --- OFFLINE FALLBACK ---
-        // Force the app to use the bundled local wav file
-        await AsyncStorage.setItem('LATEST_ALARM_FILE_URI', 'fallback');
-        await scheduleAlarm(alarmTime);
-        setIsAlarmActive(true);
-
-        const now = new Date();
-        let target = new Date(alarmTime);
-        if (target <= now) target.setDate(target.getDate() + 1);
-        const diffMs = target.getTime() - now.getTime();
-        const diffH = Math.floor(diffMs / 3600000);
-        const diffM = Math.floor((diffMs % 3600000) / 60000);
-        
-        setStatusMessage(`⚠️ 离线模式\nAI 生成失败，已启用物理震铃兜底。\n✅ ${diffH}小时${diffM}分后保证响铃`);
+        console.error('AI generation failed (alarm still scheduled):', error);
+        setStatusMessage(`⚠️ AI 生成失败，已用默认铃声兜底\n✅ ${diffH}小时${diffM}分后保证响铃`);
       } finally {
         setIsGenerating(false);
       }
