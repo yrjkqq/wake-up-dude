@@ -56,16 +56,16 @@
 
 ---
 
-### Sprint 6: 闹钟引擎迁移 — 从 expo-notifications 到 @notifee/react-native 🚧
+### Sprint 6: 闹钟引擎迁移 — 从 expo-notifications 到 @notifee/react-native ✅
 > **前因：** 经过真机深度测试发现 `expo-notifications` 存在致命硬伤：通知系统只能播放编译时打包的静态音频（`test_alarm.wav`），无法在熄屏/App 被杀状态下播放运行时动态生成的 AI 音频。`expo-av` 的播放回调 (`addNotificationReceivedListener`) 仅在 App 处于前台时触发，这意味着用户睡着后手机熄屏，闹钟只能播放一个固定的铃声——完全违背了"每天 AI 生成独一无二叫醒语音"的核心产品理念。
 
-> **解法：** 引入 `@notifee/react-native` 原生闹钟库，利用 Android 系统级 `AlarmManager.setExactAndAllowWhileIdle()` API 实现精准唤醒，配合 `fullScreenAction` 全屏 Intent 在锁屏/熄屏状态下直接点亮屏幕、启动独立的全屏闹钟 React 组件，由该组件即时调用 `expo-av` 播放沙盒中缓存的 AI 音频。此方案彻底绕开了通知声音的静态文件限制。
+> **解法：** 引入 `@notifee/react-native` 原生闹钟库，利用 Android 系统级 `AlarmManager.setAlarmClock()` API 彻底绕过 Doze 省电模式实现由底层强杀零秒延迟唤醒。在此基础上，通过注入原生 Activity 的 `showWhenLocked` 等强制亮屏参数，并指导用户针对深度定制系统开启“后台弹出界面”权限，实现完美锁屏解锁并在本地拉起全屏 Modal 进行 React Native JS 音频播放闭环。此外，抛弃不稳定的后台事件监听，引入极其稳固的 `AppState` 生命周期轮询校验机制，确保首页状态的原子级一致。
 
-* [ ] 安装 `@notifee/react-native` 并创建 Expo Config Plugin 注入 `SCHEDULE_EXACT_ALARM` + `USE_FULL_SCREEN_INTENT` 权限。
-* [ ] 重写 `services/notification-service.ts`，用 Notifee `TimestampTrigger` + `alarmManager` + `fullScreenAction` 替代 `expo-notifications` 调度。
-* [ ] 新建全屏闹钟组件 `components/AlarmScreen.tsx`，通过 `AppRegistry.registerComponent` 注册为 Notifee 的 `mainComponent`，挂载时自动循环播放 AI 音频。
-* [ ] 重构 `app/index.tsx` 主屏逻辑，移除旧监听器，接入 Notifee 事件系统与精确闹钟权限引导。
-* [ ] 重新构建 Dev Client 原生包并进行熄屏/后台/App 被杀全场景测试。
+* [x] 安装 `@notifee/react-native` 并创建 Expo Config Plugin 注入 `SCHEDULE_EXACT_ALARM` + `SYSTEM_ALERT_WINDOW` 相关权限。
+* [x] 重写 `services/notification-service.ts`，彻底使用 `AlarmType.SET_ALARM_CLOCK` 取代 `expo-notifications` 调度。
+* [x] 新建全屏闹钟组件 `components/AlarmScreen.tsx`，运用 `Modal` + `AppState` 生命周期拦截并覆盖前端路由，挂载时自动循环播放 AI 音频。
+* [x] 重构 `app/index.tsx` 与 `_layout.tsx` 主屏逻辑，移除旧监听器，利用 `getDisplayedNotifications` 实现被冻结与唤醒状态下的防抖核验与主动 UI 刷新。
+* [x] 重新构建 Dev Client 原生包并进行熄屏/后台/彻底划杀状态下的秒级打盹穿透唤醒大考。
 
 ### Sprint 7: 全局 UI 重构 (Visual Overhaul)
 > 在 Sprint 6 确认功能稳定后，对全部页面进行一次性视觉升级。此时组件结构已确定（主屏 + 全屏闹钟 + 历史 + 设置），可以统一设计语言，避免返工。
