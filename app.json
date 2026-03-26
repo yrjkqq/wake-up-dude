@@ -2,7 +2,7 @@
   "expo": {
     "name": "Wake Up Dude",
     "slug": "wake-up-dude",
-    "version": "1.0.0",
+    "version": "1.1.0",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
     "scheme": "wakeupdude",
@@ -10,6 +10,7 @@
     "newArchEnabled": true,
     "ios": {
       "supportsTablet": true,
+      "buildNumber": "2",
       "bundleIdentifier": "com.wakeupdude.app",
       "infoPlist": {
         "ITSAppUsesNonExemptEncryption": false
@@ -17,6 +18,7 @@
     },
     "android": {
       "package": "com.wakeupdude.app",
+      "versionCode": 2,
       "adaptiveIcon": {
         "backgroundColor": "#E6F4FE",
         "foregroundImage": "./assets/images/android-icon-foreground.png",

@@ -90,7 +90,9 @@ export default {
       const candidate = ttsResponse.candidates?.[0];
       if (!candidate) throw new Error('No candidate returned from TTS API');
       const audioPart = candidate.content?.parts?.find(p => p.inlineData != null);
-      if (!audioPart || !audioPart.inlineData) throw new Error('TTS response did not contain audio inlineData');
+      if (!audioPart || !audioPart.inlineData) {
+        throw new Error('TTS response did not contain audio inlineData. Received: ' + JSON.stringify(candidate.content));
+      }
 
       // 6. Audio Hex Processing (Serverless Buffer)
       const rawPcmBase64 = audioPart.inlineData.data || '';

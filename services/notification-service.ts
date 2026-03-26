@@ -2,6 +2,7 @@ import notifee, {
   AndroidImportance,
   AndroidCategory,
   AndroidNotificationSetting,
+  AndroidVisibility,
   TimestampTrigger,
   TriggerType,
 } from '@notifee/react-native';
@@ -20,6 +21,8 @@ export async function initNotifications(): Promise<void> {
       id: ALARM_CHANNEL_ID,
       name: 'Alarm',
       importance: AndroidImportance.HIGH,
+      bypassDnd: true, // Allow alarm to bypass Do Not Disturb
+      visibility: AndroidVisibility.PUBLIC, // Show on lock screen
       sound: 'test_alarm', // maps to res/raw/test_alarm.wav (bundled by expo-notifications plugin)
       vibration: true,
       vibrationPattern: [300, 500, 300, 500],
@@ -97,7 +100,7 @@ export async function scheduleAlarm(time: Date): Promise<string> {
     type: TriggerType.TIMESTAMP,
     timestamp: trigger.getTime(),
     alarmManager: {
-      allowWhileIdle: true,
+      type: 4, // AlarmType.SET_ALARM_CLOCK
     },
   };
 
@@ -111,7 +114,7 @@ export async function scheduleAlarm(time: Date): Promise<string> {
         importance: AndroidImportance.HIGH,
         fullScreenAction: {
           id: 'default',
-          mainComponent: 'alarm-screen',
+          launchActivity: 'default',
         },
         ongoing: true,     // user cannot swipe-dismiss
         autoCancel: false,  // stays until programmatically cancelled
