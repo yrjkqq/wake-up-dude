@@ -56,6 +56,25 @@
 
 ---
 
-### Sprint 6: 未来的进阶规划 (Post-Launch)
+### Sprint 6: 闹钟引擎迁移 — 从 expo-notifications 到 @notifee/react-native 🚧
+> **前因：** 经过真机深度测试发现 `expo-notifications` 存在致命硬伤：通知系统只能播放编译时打包的静态音频（`test_alarm.wav`），无法在熄屏/App 被杀状态下播放运行时动态生成的 AI 音频。`expo-av` 的播放回调 (`addNotificationReceivedListener`) 仅在 App 处于前台时触发，这意味着用户睡着后手机熄屏，闹钟只能播放一个固定的铃声——完全违背了"每天 AI 生成独一无二叫醒语音"的核心产品理念。
+
+> **解法：** 引入 `@notifee/react-native` 原生闹钟库，利用 Android 系统级 `AlarmManager.setExactAndAllowWhileIdle()` API 实现精准唤醒，配合 `fullScreenAction` 全屏 Intent 在锁屏/熄屏状态下直接点亮屏幕、启动独立的全屏闹钟 React 组件，由该组件即时调用 `expo-av` 播放沙盒中缓存的 AI 音频。此方案彻底绕开了通知声音的静态文件限制。
+
+* [ ] 安装 `@notifee/react-native` 并创建 Expo Config Plugin 注入 `SCHEDULE_EXACT_ALARM` + `USE_FULL_SCREEN_INTENT` 权限。
+* [ ] 重写 `services/notification-service.ts`，用 Notifee `TimestampTrigger` + `alarmManager` + `fullScreenAction` 替代 `expo-notifications` 调度。
+* [ ] 新建全屏闹钟组件 `components/AlarmScreen.tsx`，通过 `AppRegistry.registerComponent` 注册为 Notifee 的 `mainComponent`，挂载时自动循环播放 AI 音频。
+* [ ] 重构 `app/index.tsx` 主屏逻辑，移除旧监听器，接入 Notifee 事件系统与精确闹钟权限引导。
+* [ ] 重新构建 Dev Client 原生包并进行熄屏/后台/App 被杀全场景测试。
+
+### Sprint 7: 全局 UI 重构 (Visual Overhaul)
+> 在 Sprint 6 确认功能稳定后，对全部页面进行一次性视觉升级。此时组件结构已确定（主屏 + 全屏闹钟 + 历史 + 设置），可以统一设计语言，避免返工。
+
+* [ ] 重设计主屏（时间选择器、闹钟按钮、状态提示区域）。
+* [ ] 重设计全屏闹钟页（锁屏唤醒界面、SwipeToStop 视觉升级）。
+* [ ] 重设计历史页与设置页。
+* [ ] 统一色彩体系、字体排版与动效规范。
+
+### Sprint 8: 未来的进阶规划 (Post-Launch)
 * [ ] 接入天气 API，将实时天气信息注入 AI Prompt context 增加更极客的内容变种。
 * [ ] 接入 `expo-calendar`，自动读取当日待办事项作为叫醒拷问素材（比如"今天上午 10 点有个会，你打算缺席被炒鱿鱼吗？"）。

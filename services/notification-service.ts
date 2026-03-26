@@ -1,31 +1,28 @@
-import * as Notifications from 'expo-notifications';
+import notifee, {
+  AndroidImportance,
+  AndroidCategory,
+  AndroidNotificationSetting,
+  TimestampTrigger,
+  TriggerType,
+} from '@notifee/react-native';
 import { Platform } from 'react-native';
 
-// Configure how notifications appear when the app is in the foreground
-Notifications.setNotificationHandler({
-  handleNotification: async () => ({
-    shouldShowAlert: true,
-    shouldPlaySound: false, // Mute generic system beep if app is ACTIVE!
-    shouldSetBadge: false,
-    shouldShowBanner: true,
-    shouldShowList: true,
-  }),
-});
-
-const ALARM_CHANNEL_ID = 'alarm-channel-v2';
+const ALARM_CHANNEL_ID = 'alarm-channel-notifee';
 
 /**
- * Initialize notification settings.
- * On Android, creates a notification channel with the custom alarm sound.
+ * Initialize notification channel.
+ * Creates an Android notification channel with alarm-level importance
+ * and the bundled fallback sound.
  */
 export async function initNotifications(): Promise<void> {
   if (Platform.OS === 'android') {
-    await Notifications.setNotificationChannelAsync(ALARM_CHANNEL_ID, {
+    await notifee.createChannel({
+      id: ALARM_CHANNEL_ID,
       name: 'Alarm',
-      importance: Notifications.AndroidImportance.MAX,
-      sound: 'test_alarm.wav',
-      vibrationPattern: [0, 500, 250, 500],
-      enableVibrate: true,
+      importance: AndroidImportance.HIGH,
+      sound: 'test_alarm', // maps to res/raw/test_alarm.wav (bundled by expo-notifications plugin)
+      vibration: true,
+      vibrationPattern: [300, 500, 300, 500],
     });
   }
 }
@@ -35,14 +32,27 @@ export async function initNotifications(): Promise<void> {
  * Returns true if permission was granted.
  */
 export async function requestPermissions(): Promise<boolean> {
-  const { status: existingStatus } = await Notifications.getPermissionsAsync();
+  const settings = await notifee.requestPermission();
+  // On Android 13+, authorizationStatus will be AUTHORIZED(1) or DENIED(0)
+  return settings.authorizationStatus >= 1;
+}
 
-  if (existingStatus === 'granted') {
-    return true;
-  }
+/**
+ * Check if the exact alarm permission is enabled (Android 12+).
+ * Returns true if allowed, false if user needs to manually enable.
+ */
+export async function checkExactAlarmPermission(): Promise<boolean> {
+  if (Platform.OS !== 'android') return true;
 
-  const { status } = await Notifications.requestPermissionsAsync();
-  return status === 'granted';
+  const settings = await notifee.getNotificationSettings();
+  return settings.android.alarm === AndroidNotificationSetting.ENABLED;
+}
+
+/**
+ * Open the system "Alarms & Reminders" settings page for this app.
+ */
+export async function openAlarmSettings(): Promise<void> {
+  await notifee.openAlarmPermissionSettings();
 }
 
 /**
@@ -52,22 +62,11 @@ export async function requestPermissions(): Promise<boolean> {
 export async function checkAlarmSoundEnabled(): Promise<boolean> {
   if (Platform.OS !== 'android') return true;
 
-  const channel = await Notifications.getNotificationChannelAsync(ALARM_CHANNEL_ID);
+  const channel = await notifee.getChannel(ALARM_CHANNEL_ID);
   if (!channel) return false;
-  
-  // MIN=1, LOW=2 are silent. DEFAULT=3 or higher has sound.
-  if (channel.importance < Notifications.AndroidImportance.DEFAULT) {
-    return false;
-  }
 
-  // Handle various runtime representations of the "Silent" sound option across Android devices
-  const soundStr = String(channel.sound).toLowerCase();
-  if (
-    channel.sound === null ||
-    soundStr === 'none' ||
-    soundStr === 'null' ||
-    soundStr === 'false'
-  ) {
+  // importance LOW(2) or MIN(1) means silent
+  if (channel.importance !== undefined && channel.importance < AndroidImportance.DEFAULT) {
     return false;
   }
 
@@ -75,43 +74,59 @@ export async function checkAlarmSoundEnabled(): Promise<boolean> {
 }
 
 /**
- * Schedule a local notification at the given time with custom alarm sound.
- * Returns the notification identifier (used for cancellation).
+ * Schedule a local alarm notification at the given time using Notifee's
+ * TimestampTrigger with AlarmManager for precise delivery, even in Doze mode.
+ *
+ * Configures fullScreenAction to launch the 'alarm-screen' React component
+ * when the alarm fires, allowing expo-av to play dynamic AI audio from the
+ * lock screen / screen-off state.
  */
 export async function scheduleAlarm(time: Date): Promise<string> {
   // Cancel any existing alarm first
   await cancelAllAlarms();
 
   const now = new Date();
-  let trigger = time;
+  let trigger = new Date(time);
 
   // If the time is in the past, schedule for tomorrow
   if (trigger <= now) {
-    trigger = new Date(trigger);
     trigger.setDate(trigger.getDate() + 1);
   }
 
-  const secondsUntilAlarm = Math.max(
-    1,
-    Math.floor((trigger.getTime() - now.getTime()) / 1000)
-  );
+  const tsTrigger: TimestampTrigger = {
+    type: TriggerType.TIMESTAMP,
+    timestamp: trigger.getTime(),
+    alarmManager: {
+      allowWhileIdle: true,
+    },
+  };
 
-  const id = await Notifications.scheduleNotificationAsync({
-    content: {
+  const id = await notifee.createTriggerNotification(
+    {
       title: '⏰ Wake up dude!',
       body: '起床啦！别再赖床了！',
-      sound: Platform.OS === 'android' ? 'test_alarm.wav' : true,
-      priority: Notifications.AndroidNotificationPriority.MAX,
+      android: {
+        channelId: ALARM_CHANNEL_ID,
+        category: AndroidCategory.ALARM,
+        importance: AndroidImportance.HIGH,
+        fullScreenAction: {
+          id: 'default',
+          mainComponent: 'alarm-screen',
+        },
+        ongoing: true,     // user cannot swipe-dismiss
+        autoCancel: false,  // stays until programmatically cancelled
+        sound: 'test_alarm', // system-level fallback sound
+        pressAction: {
+          id: 'default',
+        },
+      },
     },
-    trigger: {
-      type: Notifications.SchedulableTriggerInputTypes.TIME_INTERVAL,
-      seconds: secondsUntilAlarm,
-      channelId: ALARM_CHANNEL_ID,
-    },
-  });
+    tsTrigger,
+  );
 
+  const secondsUntil = Math.floor((trigger.getTime() - now.getTime()) / 1000);
   console.log(
-    `Alarm scheduled: ${id}, fires in ${secondsUntilAlarm}s (at ${trigger.toLocaleTimeString()})`
+    `[Notifee] Alarm scheduled: ${id}, fires in ${secondsUntil}s (at ${trigger.toLocaleTimeString()})`
   );
 
   return id;
@@ -121,13 +136,13 @@ export async function scheduleAlarm(time: Date): Promise<string> {
  * Cancel all scheduled alarm notifications.
  */
 export async function cancelAllAlarms(): Promise<void> {
-  await Notifications.cancelAllScheduledNotificationsAsync();
-  console.log('All alarms cancelled');
+  await notifee.cancelAllNotifications();
+  console.log('[Notifee] All alarms cancelled');
 }
 
 /**
- * Get all currently scheduled notifications (for debugging).
+ * Get all currently scheduled trigger notification IDs (for debugging).
  */
-export async function getScheduledAlarms() {
-  return Notifications.getAllScheduledNotificationsAsync();
+export async function getScheduledAlarms(): Promise<string[]> {
+  return notifee.getTriggerNotificationIds();
 }
