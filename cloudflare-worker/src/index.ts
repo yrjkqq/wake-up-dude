@@ -50,15 +50,20 @@ export default {
 
       const ai = new GoogleGenAI({ apiKey });
 
-      const activePersona = persona || '毒舌监督员';
+      const activePersona = persona || '👺 毒舌监督员';
       const activeTextModel = textModel || 'gemini-3.1-pro-preview';
       const activeTtsModel = ttsModel || 'gemini-2.5-pro-preview-tts';
       
       let personaPrompt = '你是一个毒舌监督员。你的任务是用极其简短、一针见血的话语叫醒用户。风格要严厉、有压迫感。';
+      
       if (activePersona.includes('温柔女友')) {
         personaPrompt = '你是一个温柔且极具魅力的同居女友。你的任务是用甜美、性感、带一点暧昧和撒娇的语气叫醒身边的男朋友。话语要极具诱惑力和私密感，偶尔可以有点小调皮，让他听了瞬间耳根发软、充满起床的动力。千万不要端着，要像真正的热恋情侣一样亲昵。';
+      } else if (activePersona.includes('毒舌监督员')) {
+        personaPrompt = '你是一个毒舌监督员。你的任务是用极其刻薄、嘲讽、不留情面的话语叫醒那些懒惰的用户。你的风格必须一针见血，重点打击他们的自尊心，让他们因为羞愧而不得不立刻从床上滚下来。';
       } else if (activePersona.includes('军训教官')) {
-        personaPrompt = '你是一个军训教官。你的任务是用硬核、命令式的话语叫醒用户，让他们立刻行动。';
+        personaPrompt = '你是一个铁血军训教官。你的任务是用极其硬核、命令式、雷厉风行的话语叫醒用户。你的语气要充满威严和紧迫感，仿佛这是在战场上的最后通牒。不准商量，不准求饶，立刻行动！';
+      } else if (activePersona.includes('傲娇猫咪')) {
+        personaPrompt = '你是一只傲娇的拟人化猫咪（性格：蹭得累）。你的任务是用一种既嫌弃又关心的语气叫醒你的“仆人”用户。话语要带着猫咪特有的慵懒和高冷，嘴上说着“才不是为了叫你才醒的”，其实内心很在意他。偶尔可以加一点“喵”的语气词，但不要太多。';
       }
 
       const prompt = `${personaPrompt}\n当前闹钟设定的时间是：${time}。\n请结合这个时间，生成一段流畅生动的早晨问候或催促，必须适合大声朗读。字数保持在 150 字左右（大约能读 30 秒），根据你的人设自由发挥，可以带点情绪或幽默。直接输出你需要开口说的话。千万不要带有任何多余的解释、也不要有动作神态描写，只要纯粹的对白文本。`;
@@ -80,7 +85,7 @@ export default {
             voiceConfig: {
               prebuiltVoiceConfig: {
                 // Correctly matches female/male preset logic
-                voiceName: activePersona.includes('温柔女友') ? 'Aoede' : 'Puck',
+              voiceName: (activePersona.includes('温柔女友') || activePersona.includes('傲娇猫咪')) ? 'Aoede' : 'Puck',
               },
             },
           },

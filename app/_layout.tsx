@@ -26,6 +26,7 @@ function TabBarIcon(props: { name: React.ComponentProps<typeof Ionicons>['name']
 export default function RootLayout() {
   const colorScheme = useColorScheme();
   const [isShowingAlarm, setIsShowingAlarm] = useState(false);
+  const [selectedAlarmId, setSelectedAlarmId] = useState<number | undefined>(undefined);
 
   useEffect(() => {
     try { initDB(); } catch(e) { console.error('SQLite Init Error:', e); }
@@ -34,6 +35,9 @@ export default function RootLayout() {
       // 1. Check for cold start from alarm
       const initial = await notifee.getInitialNotification();
       if (initial?.notification?.android?.category === 'alarm') {
+        const aid = initial.notification.data?.alarmId;
+        if (typeof aid === 'string') setSelectedAlarmId(parseInt(aid, 10));
+        
         setIsShowingAlarm(true);
         if (initial.notification.id) {
           await notifee.cancelNotification(initial.notification.id);
@@ -41,10 +45,13 @@ export default function RootLayout() {
         return;
       }
 
-      // 2. Check currently displayed notifications (for warm resumes when fullScreenAction brings app to foreground)
+      // 2. Check currently displayed notifications
       const displayed = await notifee.getDisplayedNotifications();
       const alarmNotif = displayed.find(n => n.notification.android?.category === 'alarm');
       if (alarmNotif) {
+        const aid = alarmNotif.notification.data?.alarmId;
+        if (typeof aid === 'string') setSelectedAlarmId(parseInt(aid, 10));
+
         setIsShowingAlarm(true);
         if (alarmNotif.id) {
           await notifee.cancelNotification(alarmNotif.id);
@@ -68,6 +75,9 @@ export default function RootLayout() {
         (type === EventType.DELIVERED || type === EventType.PRESS) &&
         detail.notification?.android?.category === 'alarm'
       ) {
+        const aid = detail.notification.data?.alarmId;
+        if (typeof aid === 'string') setSelectedAlarmId(parseInt(aid, 10));
+
         setIsShowingAlarm(true);
         if (detail.notification.id) {
           await notifee.cancelNotification(detail.notification.id);
@@ -95,7 +105,10 @@ export default function RootLayout() {
 
       {/* Render AlarmScreen over the entire app when alarm triggers */}
       <Modal visible={isShowingAlarm} animationType="fade" transparent={false}>
-        <AlarmScreenComponent onClose={() => setIsShowingAlarm(false)} />
+        <AlarmScreenComponent 
+          alarmId={selectedAlarmId}
+          onClose={() => setIsShowingAlarm(false)} 
+        />
       </Modal>
     </ThemeProvider>
   );
