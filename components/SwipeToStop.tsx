@@ -19,6 +19,9 @@ export default function SwipeToStop({ onStop }: Props) {
   const KNOB_SIZE = 60;
   const MAX_SWIPE = SWIPE_WIDTH - KNOB_SIZE;
 
+  const onStopRef = useRef(onStop);
+  onStopRef.current = onStop;
+
   const panResponder = useRef(
     PanResponder.create({
       onStartShouldSetPanResponder: () => true,
@@ -35,7 +38,7 @@ export default function SwipeToStop({ onStop }: Props) {
             toValue: { x: MAX_SWIPE, y: 0 },
             useNativeDriver: false,
           }).start(() => {
-             onStop();
+             onStopRef.current();
              // Reset back slowly after stopped
              setTimeout(() => {
                 pan.setValue({ x: 0, y: 0 });

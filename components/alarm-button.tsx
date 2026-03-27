@@ -4,6 +4,7 @@ import Animated, {
   useSharedValue,
   useAnimatedStyle,
   withSpring,
+  ReduceMotion,
 } from 'react-native-reanimated';
 
 import { ThemedText } from '@/components/themed-text';
@@ -28,11 +29,11 @@ export function AlarmButton({ isActive, onPress, style }: AlarmButtonProps) {
   }));
 
   const handlePressIn = () => {
-    scale.value = withSpring(0.95, { damping: 15, stiffness: 300 });
+    scale.value = withSpring(0.95, { damping: 15, stiffness: 300, reduceMotion: ReduceMotion.System });
   };
 
   const handlePressOut = () => {
-    scale.value = withSpring(1, { damping: 15, stiffness: 300 });
+    scale.value = withSpring(1, { damping: 15, stiffness: 300, reduceMotion: ReduceMotion.System });
   };
 
   return (

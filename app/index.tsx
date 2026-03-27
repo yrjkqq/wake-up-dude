@@ -20,14 +20,9 @@ import {
   getScheduledAlarms,
 } from '@/services/notification-service';
 import { generateAlarmAudio, checkHasLatestAlarm } from '@/services/ai-service';
-import notifee, { EventType } from '@notifee/react-native';
 import { Audio } from 'expo-av';
 import * as FileSystem from 'expo-file-system/legacy';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-
-function padZero(n: number): string {
-  return n.toString().padStart(2, '0');
-}
 
 
 export default function AlarmScreen() {
@@ -50,7 +45,7 @@ export default function AlarmScreen() {
   const soundRef = React.useRef<Audio.Sound | null>(null);
 
   const timeString = useMemo(() => {
-    return `${padZero(alarmTime.getHours())}:${padZero(alarmTime.getMinutes())}`;
+    return new Intl.DateTimeFormat('zh-CN', { hour: '2-digit', minute: '2-digit', hour12: false }).format(alarmTime);
   }, [alarmTime]);
 
   // Initialize notifications on mount
@@ -293,7 +288,7 @@ export default function AlarmScreen() {
               <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center', marginBottom: 12 }}>
                 <ActivityIndicator size="small" color={colors.tint} style={{ marginRight: 8 }} />
                 <ThemedText style={{ color: colors.tint, fontSize: 16, fontWeight: '600' }}>
-                  🧠 正在连接 {activeWaitModel}...
+                  🧠 正在连接 {activeWaitModel}…
                 </ThemedText>
               </View>
             )}

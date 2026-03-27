@@ -8,7 +8,7 @@ export default function DatePicker({ date, onDateChange }: any) {
   const colors = Colors[colorScheme];
 
   // The HTML time picker needs HH:mm format
-  const timeString = `${date.getHours().toString().padStart(2, '0')}:${date.getMinutes().toString().padStart(2, '0')}`;
+  const timeString = new Intl.DateTimeFormat('en-US', { hour: '2-digit', minute: '2-digit', hour12: false }).format(date);
 
   return (
     <View style={{ alignItems: 'center', justifyContent: 'center', height: 180, width: '100%' }}>
@@ -16,6 +16,7 @@ export default function DatePicker({ date, onDateChange }: any) {
       <input
         type="time"
         value={timeString}
+        aria-label="选择时间"
         onChange={(e) => {
           const val = e.target.value;
           if (val) {
@@ -32,7 +33,6 @@ export default function DatePicker({ date, onDateChange }: any) {
           border: `1px solid ${colors.border}`,
           backgroundColor: 'transparent',
           color: colors.text,
-          outline: 'none',
           fontFamily: 'monospace',
         }}
       />
