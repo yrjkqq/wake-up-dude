@@ -5,7 +5,6 @@ import 'react-native-reanimated';
 import { useEffect, useState } from 'react';
 import { Ionicons } from '@expo/vector-icons';
 import { Colors } from '@/constants/theme';
-import { initDB } from '@/services/database';
 import { useColorScheme } from '@/hooks/use-color-scheme';
 import notifee, { EventType } from '@notifee/react-native';
 import { Modal, AppState } from 'react-native';
@@ -29,8 +28,6 @@ export default function RootLayout() {
   const [selectedAlarmId, setSelectedAlarmId] = useState<number | undefined>(undefined);
 
   useEffect(() => {
-    try { initDB(); } catch(e) { console.error('SQLite Init Error:', e); }
-
     const checkAlarmState = async () => {
       // 1. Check for cold start from alarm
       const initial = await notifee.getInitialNotification();
