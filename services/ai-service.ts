@@ -1,12 +1,16 @@
 import * as FileSystem from 'expo-file-system/legacy';
-import { saveAlarmToHistory } from './database';
+import { getAlarms, updateAlarmAudio } from './database';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
 export const LATEST_ALARM_KEY = 'LATEST_ALARM_FILE_URI';
 
+/**
+ * Core generation logic shared between manual and background triggers.
+ * NOTE: History is no longer saved here, per user requirement to save only on trigger.
+ */
 export async function generateAlarmAudio(
   timeStr: string,
-  persona: string = '毒舌监督员'
+  persona: string = '👺 毒舌监督员'
 ): Promise<{ text: string; audioUri: string }> {
   
   const textModel = await AsyncStorage.getItem('SETTINGS_TEXT_MODEL') || 'gemini-3.1-pro-preview';
@@ -14,7 +18,6 @@ export async function generateAlarmAudio(
 
   let apiUrl = process.env.EXPO_PUBLIC_API_URL;
   if (!apiUrl) {
-    // Production Fallback to Cloudflare globally distributed Edge Worker
     apiUrl = 'https://wake-up-dude-api.wake-up-dude-api.workers.dev';
   }
 
@@ -39,12 +42,28 @@ export async function generateAlarmAudio(
     encoding: 'base64',
   });
 
-  // Store the target alarm time explicitly in the history UI by prepending it to the persona string
-  saveAlarmToHistory(`[${timeStr}] ${persona}`, text, fileUri);
   await AsyncStorage.setItem(LATEST_ALARM_KEY, fileUri);
 
-  console.log('[AI Service] Saved dynamic alarm audio/history to:', fileUri);
+  console.log('[AI Service] Generated dynamic alarm audio to:', fileUri);
   return { text, audioUri: fileUri };
+}
+
+/**
+ * Background-friendly wrapper that fetches alarm metadata from DB first.
+ */
+export async function generateAlarmAudioForId(alarmId: number): Promise<void> {
+  const alarms = getAlarms();
+  const alarm = alarms.find(a => a.id === alarmId);
+  
+  if (!alarm) {
+    throw new Error(`Alarm with ID ${alarmId} not found in DB`);
+  }
+
+  console.log(`[AI Service] Background generating for alarm: ${alarm.time} (${alarm.persona})`);
+  const { audioUri } = await generateAlarmAudio(alarm.time, alarm.persona);
+  
+  // Update the database with the new local file URI
+  updateAlarmAudio(alarmId, audioUri);
 }
 
 export async function checkHasLatestAlarm(): Promise<string | null> {

@@ -21,13 +21,15 @@ import { ThemedText } from '@/components/themed-text';
 import { LATEST_ALARM_KEY } from '@/services/ai-service';
 
 interface Props {
+  alarmId?: number;
   onClose?: () => void;
 }
 
-function AlarmScreenComponent({ onClose }: Props) {
+function AlarmScreenComponent({ alarmId, onClose }: Props) {
   const soundRef = useRef<Audio.Sound | null>(null);
   const [currentTime, setCurrentTime] = useState('');
   const [isStopped, setIsStopped] = useState(false);
+  const [persona, setPersona] = useState('AI 专属语音');
 
   // Tick the clock display
   useEffect(() => {
@@ -53,26 +55,44 @@ function AlarmScreenComponent({ onClose }: Props) {
           staysActiveInBackground: true,
         });
 
-        const uri = await AsyncStorage.getItem(LATEST_ALARM_KEY);
+        // 1. Find the specific alarm and its audio
+        let audioUri: string | null = null;
+        let alarmPersona = '🌸 温柔女友';
+        
+        if (alarmId !== undefined) {
+          const { getAlarms, saveAlarmToHistory } = require('@/services/database');
+          const alarm = getAlarms().find((a: any) => a.id === alarmId);
+          if (alarm) {
+            audioUri = alarm.lastAudioUri;
+            alarmPersona = alarm.persona;
+            setPersona(alarmPersona);
+            
+            // 2. RECORD TO HISTORY (Only on trigger, as requested)
+            // Note: We don't have the generated 'text' here easily unless we stored it in the alarm table.
+            // For now, we use a generic placeholder or fetch 'latest' if it matches.
+            saveAlarmToHistory(`[触发] ${alarmPersona}`, '你的专属叫醒服务已启动', audioUri || 'fallback');
+          }
+        } else {
+          audioUri = await AsyncStorage.getItem(LATEST_ALARM_KEY);
+        }
+
         let soundToPlay: Audio.Sound;
 
-        if (uri && uri !== 'fallback') {
-          const info = await FileSystem.getInfoAsync(uri);
+        // 3. Fallback logic
+        if (audioUri && audioUri !== 'fallback') {
+          const info = await FileSystem.getInfoAsync(audioUri);
           if (info.exists) {
             const tempUri = FileSystem.cacheDirectory + `alarm_play_${Date.now()}.wav`;
-            await FileSystem.copyAsync({ from: uri, to: tempUri });
+            await FileSystem.copyAsync({ from: audioUri, to: tempUri });
             const { sound } = await Audio.Sound.createAsync({ uri: tempUri });
             soundToPlay = sound;
           } else {
-            const { sound } = await Audio.Sound.createAsync(
-              require('@/assets/sounds/test_alarm.wav')
-            );
+            console.warn('[AlarmScreen] Audio file missing, falling back');
+            const { sound } = await Audio.Sound.createAsync(require('@/assets/sounds/test_alarm.wav'));
             soundToPlay = sound;
           }
         } else {
-          const { sound } = await Audio.Sound.createAsync(
-            require('@/assets/sounds/test_alarm.wav')
-          );
+          const { sound } = await Audio.Sound.createAsync(require('@/assets/sounds/test_alarm.wav'));
           soundToPlay = sound;
         }
 
@@ -97,7 +117,7 @@ function AlarmScreenComponent({ onClose }: Props) {
         soundRef.current.unloadAsync().catch(() => {});
       }
     };
-  }, []);
+  }, [alarmId]);
 
   const handleStop = useCallback(async () => {
     setIsStopped(true);
@@ -139,7 +159,7 @@ function AlarmScreenComponent({ onClose }: Props) {
         <ThemedText style={styles.alertEmoji}>🔔</ThemedText>
         <ThemedText style={styles.alertText}>Wake up dude!</ThemedText>
         <ThemedText style={styles.alertSubtext}>
-          AI 专属语音正在播放…
+          {persona} 专属语音正在播放…
         </ThemedText>
       </View>
 

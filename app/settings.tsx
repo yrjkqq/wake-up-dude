@@ -9,7 +9,12 @@ import { Ionicons } from '@expo/vector-icons';
 import { clearAllHistory } from '@/services/database';
 import * as FileSystem from 'expo-file-system/legacy';
 
-const PERSONAS = ['🔥 毒舌监督员', '💪 军训教官', '🌸 温柔女友', '💼 社畜互助'];
+const PERSONAS = [
+  '🌸 温柔女友',
+  '👺 毒舌监督员',
+  '💂 军训教官',
+  '🐱 傲娇猫咪',
+];
 const TEXT_MODELS = ['gemini-3.1-pro-preview', 'gemini-2.5-flash'];
 const TTS_MODELS = ['gemini-2.5-pro-preview-tts', 'gemini-2.5-flash-preview-tts'];
 
@@ -87,7 +92,7 @@ export default function Settings() {
         <ThemedText style={styles.title}>全局设置选项</ThemedText>
         
         <View style={styles.card}>
-          <SelectorBlock title="🎭 叫醒人设选择" options={PERSONAS} currentVal={persona} setVal={setPersona} k="SETTINGS_PERSONA" colors={colors} />
+          <SelectorBlock title="🎭 默认人设 (用于新闹钟)" options={PERSONAS} currentVal={persona} setVal={setPersona} k="SETTINGS_PERSONA" colors={colors} />
           <SelectorBlock title="🧠 大脑: 文本生成模型" options={TEXT_MODELS} currentVal={textModel} setVal={setTextModel} k="SETTINGS_TEXT_MODEL" colors={colors} />
           <SelectorBlock title="🎤 嘴嘴: 语音发音机制" options={TTS_MODELS} currentVal={ttsModel} setVal={setTtsModel} k="SETTINGS_TTS_MODEL" colors={colors} />
         </View>
