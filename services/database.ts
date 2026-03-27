@@ -16,6 +16,7 @@ export interface Alarm {
   enabled: boolean;
   persona: string;
   lastAudioUri: string | null;
+  lastText: string | null;
 }
 
 // 🌐 WEB MOCK: Fallback to an uninitialized database pointer when run on pure web DOMs
@@ -23,30 +24,42 @@ let db: SQLite.SQLiteDatabase | null = null;
 if (Platform.OS !== 'web') {
   try {
     db = SQLite.openDatabaseSync('wakeUpDude.db');
+    // Ensure tables exist immediately on open
+    db.execSync(`
+      CREATE TABLE IF NOT EXISTS alarm_history (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        persona TEXT NOT NULL,
+        text TEXT NOT NULL,
+        audioUri TEXT NOT NULL,
+        createdAt INTEGER NOT NULL
+      );
+      CREATE TABLE IF NOT EXISTS alarms (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        time TEXT NOT NULL,
+        days TEXT NOT NULL,
+        enabled INTEGER DEFAULT 1,
+        persona TEXT NOT NULL,
+        lastAudioUri TEXT,
+        lastText TEXT
+      );
+    `);
+    // Migration: add lastText if missing on existing installs
+    try {
+      db.execSync('ALTER TABLE alarms ADD COLUMN lastText TEXT;');
+    } catch {
+      // Ignore if column already exists
+    }
   } catch (e) {
-    console.warn('[DB] SQLite init skipped or failed:', e);
+    console.warn('[DB] SQLite init failed:', e);
   }
 }
 
+/**
+ * Migration helper (no longer strictly needed for layout if we init on open, 
+ * but kept for backwards compatibility if called elsewhere)
+ */
 export function initDB() {
-  if (!db) return;
-  db.execSync(`
-    CREATE TABLE IF NOT EXISTS alarm_history (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
-      persona TEXT NOT NULL,
-      text TEXT NOT NULL,
-      audioUri TEXT NOT NULL,
-      createdAt INTEGER NOT NULL
-    );
-    CREATE TABLE IF NOT EXISTS alarms (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
-      time TEXT NOT NULL,
-      days TEXT NOT NULL,
-      enabled INTEGER DEFAULT 1,
-      persona TEXT NOT NULL,
-      lastAudioUri TEXT
-    );
-  `);
+  // Logic moved to openDatabaseSync block above for zero-latency availability
 }
 
 export function saveAlarmToHistory(persona: string, text: string, audioUri: string) {
@@ -86,7 +99,8 @@ export function getAlarms(): Alarm[] {
   return rows.map(row => ({
     ...row,
     enabled: !!row.enabled,
-    lastAudioUri: row.lastAudioUri || null
+    lastAudioUri: row.lastAudioUri || null,
+    lastText: row.lastText || null
   }));
 }
 
@@ -116,10 +130,10 @@ export function updateAlarm(id: number, time: string, days: string, persona: str
   });
 }
 
-export function updateAlarmAudio(id: number, audioUri: string) {
+export function updateAlarmAudio(id: number, audioUri: string, text: string) {
   if (!db) return;
-  const statement = db.prepareSync('UPDATE alarms SET lastAudioUri = $uri WHERE id = $id');
-  statement.executeSync({ $id: id, $uri: audioUri });
+  const statement = db.prepareSync('UPDATE alarms SET lastAudioUri = $uri, lastText = $text WHERE id = $id');
+  statement.executeSync({ $id: id, $uri: audioUri, $text: text });
 }
 
 export function toggleAlarm(id: number, enabled: boolean) {
