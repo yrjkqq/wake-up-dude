@@ -34,7 +34,7 @@ function AlarmScreenComponent({ onClose }: Props) {
     const updateTime = () => {
       const now = new Date();
       setCurrentTime(
-        `${now.getHours().toString().padStart(2, '0')}:${now.getMinutes().toString().padStart(2, '0')}`
+        new Intl.DateTimeFormat('zh-CN', { hour: '2-digit', minute: '2-digit', hour12: false }).format(now)
       );
     };
     updateTime();
@@ -139,7 +139,7 @@ function AlarmScreenComponent({ onClose }: Props) {
         <ThemedText style={styles.alertEmoji}>🔔</ThemedText>
         <ThemedText style={styles.alertText}>Wake up dude!</ThemedText>
         <ThemedText style={styles.alertSubtext}>
-          AI 专属语音正在播放...
+          AI 专属语音正在播放…
         </ThemedText>
       </View>
 

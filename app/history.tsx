@@ -17,12 +17,12 @@ export default function History() {
   const [playingId, setPlayingId] = useState<number | null>(null);
   const soundRef = React.useRef<Audio.Sound | null>(null);
 
-  const loadData = () => {
+  const loadData = useCallback(() => {
     try {
       const data = getAlarmHistory();
       setHistory(data);
     } catch(e) { console.error('Error loading history DB', e); }
-  };
+  }, []);
 
   useFocusEffect(
     useCallback(() => {
@@ -33,10 +33,10 @@ export default function History() {
           soundRef.current = null;
         }
       };
-    }, [])
+    }, [loadData])
   );
 
-  const handleDelete = async (item: AlarmRecord) => {
+  const handleDelete = useCallback(async (item: AlarmRecord) => {
     try {
       deleteAlarmHistory(item.id);
       await FileSystem.deleteAsync(item.audioUri, { idempotent: true });
@@ -44,9 +44,9 @@ export default function History() {
     } catch(e) {
       Alert.alert('删除失败', String(e));
     }
-  };
+  }, [loadData]);
 
-  const playAudio = async (item: AlarmRecord) => {
+  const playAudio = useCallback(async (item: AlarmRecord) => {
     if (playingId === item.id && soundRef.current) {
       // Toggle stop
       await soundRef.current.stopAsync();
@@ -77,16 +77,16 @@ export default function History() {
       Alert.alert('播放失败', '录音缓存可能已被清理');
       setPlayingId(null);
     }
-  };
+  }, [playingId]);
 
-  const renderItem = ({ item }: { item: AlarmRecord }) => (
+  const renderItem = useCallback(({ item }: { item: AlarmRecord }) => (
     <View style={[styles.card, { backgroundColor: colors.surface }]}>
       <View style={styles.cardHeader}>
         <ThemedText style={{ fontSize: 13, color: colors.tint, fontWeight: '600' }}>
           {item.persona}
         </ThemedText>
         <ThemedText style={{ fontSize: 11, color: colors.textSecondary }}>
-          {new Date(item.createdAt).toLocaleString()}
+          {new Intl.DateTimeFormat('zh-CN', { dateStyle: 'short', timeStyle: 'short' }).format(new Date(item.createdAt))}
         </ThemedText>
       </View>
       <ThemedText style={styles.cardText} numberOfLines={4}>
@@ -97,12 +97,12 @@ export default function History() {
           <Ionicons name={playingId === item.id ? 'stop-circle' : 'play-circle'} size={24} color={colors.tint} />
           <ThemedText style={{ marginLeft: 6, color: colors.tint }}>{playingId === item.id ? '停播' : '回听录音'}</ThemedText>
         </TouchableOpacity>
-        <TouchableOpacity style={styles.actionBtn} onPress={() => handleDelete(item)}>
+        <TouchableOpacity style={styles.actionBtn} onPress={() => handleDelete(item)} accessibilityLabel="删除此记录" accessibilityRole="button">
           <Ionicons name="trash-outline" size={22} color={colors.danger} />
         </TouchableOpacity>
       </View>
     </View>
-  );
+  ), [colors, playingId, handleDelete, playAudio]);
 
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]} edges={['top']}>
