@@ -9,8 +9,16 @@ export interface AlarmRecord {
   createdAt: number;
 }
 
+export interface Alarm {
+  id: number;
+  time: string;
+  days: string; // JSON array of day indices 0-6
+  enabled: boolean;
+  persona: string;
+  lastAudioUri: string | null;
+}
+
 // 🌐 WEB MOCK: Fallback to an uninitialized database pointer when run on pure web DOMs
-// This prevents Expo Metro's web bundler from triggering a fatal WASM SharedArrayBuffer crash.
 let db: SQLite.SQLiteDatabase | null = null;
 if (Platform.OS !== 'web') {
   try {
@@ -30,6 +38,14 @@ export function initDB() {
       audioUri TEXT NOT NULL,
       createdAt INTEGER NOT NULL
     );
+    CREATE TABLE IF NOT EXISTS alarms (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      time TEXT NOT NULL,
+      days TEXT NOT NULL,
+      enabled INTEGER DEFAULT 1,
+      persona TEXT NOT NULL,
+      lastAudioUri TEXT
+    );
   `);
 }
 
@@ -47,7 +63,6 @@ export function saveAlarmToHistory(persona: string, text: string, audioUri: stri
 }
 
 export function getAlarmHistory(): AlarmRecord[] {
-  // Gracefully return empty arrays on web
   if (!db) return [];
   return db.getAllSync<AlarmRecord>('SELECT * FROM alarm_history ORDER BY createdAt DESC');
 }
@@ -61,4 +76,60 @@ export function deleteAlarmHistory(id: number) {
 export function clearAllHistory() {
   if (!db) return;
   db.execSync('DELETE FROM alarm_history');
+}
+
+// --- Alarms CRUD ---
+
+export function getAlarms(): Alarm[] {
+  if (!db) return [];
+  const rows = db.getAllSync<any>('SELECT * FROM alarms ORDER BY time ASC');
+  return rows.map(row => ({
+    ...row,
+    enabled: !!row.enabled,
+    lastAudioUri: row.lastAudioUri || null
+  }));
+}
+
+export function addAlarm(time: string, days: string, persona: string): number {
+  if (!db) return -1;
+  const statement = db.prepareSync(
+    'INSERT INTO alarms (time, days, persona, enabled) VALUES ($time, $days, $persona, 1)'
+  );
+  const result = statement.executeSync({
+    $time: time,
+    $days: days,
+    $persona: persona,
+  });
+  return result.lastInsertRowId;
+}
+
+export function updateAlarm(id: number, time: string, days: string, persona: string) {
+  if (!db) return;
+  const statement = db.prepareSync(
+    'UPDATE alarms SET time = $time, days = $days, persona = $persona WHERE id = $id'
+  );
+  statement.executeSync({
+    $id: id,
+    $time: time,
+    $days: days,
+    $persona: persona,
+  });
+}
+
+export function updateAlarmAudio(id: number, audioUri: string) {
+  if (!db) return;
+  const statement = db.prepareSync('UPDATE alarms SET lastAudioUri = $uri WHERE id = $id');
+  statement.executeSync({ $id: id, $uri: audioUri });
+}
+
+export function toggleAlarm(id: number, enabled: boolean) {
+  if (!db) return;
+  const statement = db.prepareSync('UPDATE alarms SET enabled = $enabled WHERE id = $id');
+  statement.executeSync({ $id: id, $enabled: enabled ? 1 : 0 });
+}
+
+export function deleteAlarm(id: number) {
+  if (!db) return;
+  const statement = db.prepareSync('DELETE FROM alarms WHERE id = $id');
+  statement.executeSync({ $id: id });
 }
