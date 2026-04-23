@@ -9,12 +9,15 @@ export interface AlarmRecord {
   createdAt: number;
 }
 
+export type AlarmType = 'voice' | 'music';
+
 export interface Alarm {
   id: number;
   time: string;
   days: string; // JSON array of day indices 0-6
   enabled: boolean;
   persona: string;
+  alarmType: AlarmType;
   lastAudioUri: string | null;
   lastText: string | null;
 }
@@ -53,6 +56,12 @@ if (Platform.OS !== 'web') {
     // Migration: add lastText if missing on existing installs
     try {
       db.execSync('ALTER TABLE alarms ADD COLUMN lastText TEXT;');
+    } catch {
+      // Ignore if column already exists
+    }
+    // Migration: add alarmType column
+    try {
+      db.execSync("ALTER TABLE alarms ADD COLUMN alarmType TEXT DEFAULT 'voice';");
     } catch {
       // Ignore if column already exists
     }
@@ -106,34 +115,37 @@ export function getAlarms(): Alarm[] {
   return rows.map(row => ({
     ...row,
     enabled: !!row.enabled,
+    alarmType: row.alarmType || 'voice',
     lastAudioUri: row.lastAudioUri || null,
     lastText: row.lastText || null
   }));
 }
 
-export function addAlarm(time: string, days: string, persona: string): number {
+export function addAlarm(time: string, days: string, persona: string, alarmType: AlarmType = 'voice'): number {
   if (!db) return -1;
   const statement = db.prepareSync(
-    'INSERT INTO alarms (time, days, persona, enabled) VALUES ($time, $days, $persona, 1)'
+    'INSERT INTO alarms (time, days, persona, alarmType, enabled) VALUES ($time, $days, $persona, $alarmType, 1)'
   );
   const result = statement.executeSync({
     $time: time,
     $days: days,
     $persona: persona,
+    $alarmType: alarmType,
   });
   return result.lastInsertRowId;
 }
 
-export function updateAlarm(id: number, time: string, days: string, persona: string) {
+export function updateAlarm(id: number, time: string, days: string, persona: string, alarmType: AlarmType = 'voice') {
   if (!db) return;
   const statement = db.prepareSync(
-    'UPDATE alarms SET time = $time, days = $days, persona = $persona WHERE id = $id'
+    'UPDATE alarms SET time = $time, days = $days, persona = $persona, alarmType = $alarmType WHERE id = $id'
   );
   statement.executeSync({
     $id: id,
     $time: time,
     $days: days,
     $persona: persona,
+    $alarmType: alarmType,
   });
 }
 

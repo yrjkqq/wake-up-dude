@@ -11,20 +11,20 @@ import { ThemedText } from './themed-text';
 import { Colors, Spacing } from '@/constants/theme';
 import { useColorScheme } from '@/hooks/use-color-scheme';
 import DatePicker from './time-picker';
-import { Alarm } from '@/services/database';
+import { Alarm, AlarmType } from '@/services/database';
 
 interface AlarmEditModalProps {
   visible: boolean;
   alarm?: Alarm; // If provided, we are editing
   onClose: () => void;
-  onSave: (time: string, persona: string) => void;
+  onSave: (time: string, persona: string, alarmType: AlarmType) => void;
 }
 
 const PERSONAS = [
-  '🌸 温柔女友',
-  '👺 毒舌监督员',
-  '💂 军训教官',
-  '🐱 傲娇猫咪',
+  '温柔女友',
+  '毒舌监督员',
+  '军训教官',
+  '傲娇猫咪',
 ];
 
 export function AlarmEditModal({ visible, alarm, onClose, onSave }: AlarmEditModalProps) {
@@ -33,6 +33,7 @@ export function AlarmEditModal({ visible, alarm, onClose, onSave }: AlarmEditMod
 
   const [date, setDate] = useState(new Date());
   const [persona, setPersona] = useState(PERSONAS[0]);
+  const [alarmType, setAlarmType] = useState<AlarmType>('voice');
 
   useEffect(() => {
     async function init() {
@@ -41,16 +42,20 @@ export function AlarmEditModal({ visible, alarm, onClose, onSave }: AlarmEditMod
         const d = new Date();
         d.setHours(hours, minutes, 0, 0);
         setDate(d);
-        setPersona(alarm.persona);
+        setPersona(alarm.persona.replace(/[\uD800-\uDBFF][\uDC00-\uDFFF]\s*/g, '')); // Strip emoji if old data
+        setAlarmType(alarm.alarmType || 'voice');
       } else {
         const d = new Date();
         d.setMinutes(d.getMinutes() + 1);
         d.setSeconds(0, 0);
         setDate(d);
         
-        // Fetch default persona from settings
+        // Fetch defaults from settings
         const defaultP = await AsyncStorage.getItem('SETTINGS_PERSONA');
-        setPersona(defaultP || PERSONAS[0]);
+        setPersona(defaultP ? defaultP.replace(/[\uD800-\uDBFF][\uDC00-\uDFFF]\s*/g, '') : PERSONAS[0]);
+        
+        const defaultType = await AsyncStorage.getItem('SETTINGS_ALARM_TYPE') as AlarmType;
+        setAlarmType(defaultType || 'voice');
       }
     }
     if (visible) init();
@@ -62,7 +67,7 @@ export function AlarmEditModal({ visible, alarm, onClose, onSave }: AlarmEditMod
       minute: '2-digit',
       hour12: false,
     });
-    onSave(timeStr, persona);
+    onSave(timeStr, persona, alarmType);
   };
 
   return (
@@ -93,7 +98,38 @@ export function AlarmEditModal({ visible, alarm, onClose, onSave }: AlarmEditMod
             </View>
 
             <View style={styles.section}>
-              <ThemedText style={styles.sectionTitle}>选择叫醒人设</ThemedText>
+              <ThemedText style={styles.sectionTitle}>闹钟类型</ThemedText>
+              <View style={styles.personaGrid}>
+                {[
+                  { label: '语音', value: 'voice' },
+                  { label: '音乐', value: 'music' },
+                ].map((t) => (
+                  <TouchableOpacity
+                    key={t.value}
+                    style={[
+                      styles.personaChip,
+                      {
+                        backgroundColor: alarmType === t.value ? colors.tint + '20' : colors.background,
+                        borderColor: alarmType === t.value ? colors.tint : colors.border,
+                      },
+                    ]}
+                    onPress={() => setAlarmType(t.value as AlarmType)}
+                  >
+                    <ThemedText
+                      style={{
+                        color: alarmType === t.value ? colors.tint : colors.text,
+                        fontSize: 14,
+                      }}
+                    >
+                      {t.label}
+                    </ThemedText>
+                  </TouchableOpacity>
+                ))}
+              </View>
+            </View>
+
+            <View style={styles.section}>
+              <ThemedText style={styles.sectionTitle}>默认人设</ThemedText>
               <View style={styles.personaGrid}>
                 {PERSONAS.map((p) => (
                   <TouchableOpacity

@@ -11,13 +11,18 @@ import { getScheduledAlarms } from '@/services/notification-service';
 import * as FileSystem from 'expo-file-system/legacy';
 
 const PERSONAS = [
-  '🌸 温柔女友',
-  '👺 毒舌监督员',
-  '💂 军训教官',
-  '🐱 傲娇猫咪',
+  '温柔女友',
+  '毒舌监督员',
+  '军训教官',
+  '傲娇猫咪',
 ];
 const TEXT_MODELS = ['gemini-3.1-pro-preview', 'gemini-2.5-flash'];
-const TTS_MODELS = ['gemini-2.5-pro-preview-tts', 'gemini-2.5-flash-preview-tts'];
+const TTS_MODELS = ['gemini-3.1-flash-tts-preview', 'gemini-2.5-pro-preview-tts', 'gemini-2.5-flash-preview-tts'];
+const MUSIC_MODELS = ['lyria-3-clip-preview', 'lyria-3-pro-preview'];
+const ALARM_TYPES = [
+  { label: '语音', value: 'voice' },
+  { label: '音乐', value: 'music' },
+];
 
 const SelectorBlock = ({ title, options, currentVal, setVal, k, colors }: any) => {
   const saveSetting = async (key: string, val: string, setter: any) => {
@@ -28,18 +33,22 @@ const SelectorBlock = ({ title, options, currentVal, setVal, k, colors }: any) =
     <View style={styles.block}>
       <ThemedText style={{ fontWeight: 'bold', marginBottom: Spacing.sm, color: colors.text }}>{title}</ThemedText>
       <View style={styles.chipRow}>
-        {options.map((opt: string) => (
-          <TouchableOpacity
-            key={opt}
-            onPress={() => saveSetting(k, opt, setVal)}
-            style={[
-              styles.chip,
-              { backgroundColor: currentVal === opt ? colors.tint : 'transparent', borderColor: currentVal === opt ? colors.tint : colors.border }
-            ]}
-          >
-            <ThemedText style={{ color: currentVal === opt ? colors.background : colors.text, fontSize: 13 }}>{opt}</ThemedText>
-          </TouchableOpacity>
-        ))}
+        {options.map((opt: any) => {
+          const val = opt.value || opt;
+          const label = opt.label || opt;
+          return (
+            <TouchableOpacity
+              key={val}
+              onPress={() => saveSetting(k, val, setVal)}
+              style={[
+                styles.chip,
+                { backgroundColor: currentVal === val ? colors.tint : 'transparent', borderColor: currentVal === val ? colors.tint : colors.border }
+              ]}
+            >
+              <ThemedText style={{ color: currentVal === val ? colors.background : colors.text, fontSize: 13 }}>{label}</ThemedText>
+            </TouchableOpacity>
+          );
+        })}
       </View>
     </View>
   );
@@ -69,6 +78,8 @@ export default function Settings() {
   const [persona, setPersona] = useState(PERSONAS[2]);
   const [textModel, setTextModel] = useState(TEXT_MODELS[0]);
   const [ttsModel, setTtsModel] = useState(TTS_MODELS[0]);
+  const [musicModel, setMusicModel] = useState(MUSIC_MODELS[0]);
+  const [alarmType, setAlarmType] = useState(ALARM_TYPES[0].value);
   const [showDebugLogs, setShowDebugLogs] = useState(false);
   const [debugLogs, setDebugLogs] = useState<DebugLog[]>([]);
 
@@ -77,9 +88,13 @@ export default function Settings() {
       const p = await AsyncStorage.getItem('SETTINGS_PERSONA');
       const tm = await AsyncStorage.getItem('SETTINGS_TEXT_MODEL');
       const ttsm = await AsyncStorage.getItem('SETTINGS_TTS_MODEL');
-      if (p) setPersona(p);
+      const mm = await AsyncStorage.getItem('SETTINGS_MUSIC_MODEL');
+      const at = await AsyncStorage.getItem('SETTINGS_ALARM_TYPE');
+      if (p) setPersona(p.replace(/[\uD800-\uDBFF][\uDC00-\uDFFF]\s*/g, ''));
       if (tm) setTextModel(tm);
       if (ttsm) setTtsModel(ttsm);
+      if (mm) setMusicModel(mm);
+      if (at) setAlarmType(at);
     }
     load();
   }, []);
@@ -152,9 +167,11 @@ export default function Settings() {
         <ThemedText style={styles.title}>全局设置选项</ThemedText>
         
         <View style={styles.card}>
-          <SelectorBlock title="🎭 默认人设 (用于新闹钟)" options={PERSONAS} currentVal={persona} setVal={setPersona} k="SETTINGS_PERSONA" colors={colors} />
-          <SelectorBlock title="🧠 大脑: 文本生成模型" options={TEXT_MODELS} currentVal={textModel} setVal={setTextModel} k="SETTINGS_TEXT_MODEL" colors={colors} />
-          <SelectorBlock title="🎤 嘴嘴: 语音发音机制" options={TTS_MODELS} currentVal={ttsModel} setVal={setTtsModel} k="SETTINGS_TTS_MODEL" colors={colors} />
+          <SelectorBlock title="默认人设 (用于新闹钟)" options={PERSONAS} currentVal={persona} setVal={setPersona} k="SETTINGS_PERSONA" colors={colors} />
+          <SelectorBlock title="默认闹钟类型" options={ALARM_TYPES} currentVal={alarmType} setVal={setAlarmType} k="SETTINGS_ALARM_TYPE" colors={colors} />
+          <SelectorBlock title="音乐生成模型" options={MUSIC_MODELS} currentVal={musicModel} setVal={setMusicModel} k="SETTINGS_MUSIC_MODEL" colors={colors} />
+          <SelectorBlock title="文本生成模型" options={TEXT_MODELS} currentVal={textModel} setVal={setTextModel} k="SETTINGS_TEXT_MODEL" colors={colors} />
+          <SelectorBlock title="语音引擎" options={TTS_MODELS} currentVal={ttsModel} setVal={setTtsModel} k="SETTINGS_TTS_MODEL" colors={colors} />
         </View>
 
         <View style={[styles.card, { marginTop: Spacing.lg }]}>

@@ -39,7 +39,7 @@ export default {
 
       // 3. Payload parsing
       const body = await request.json() as any;
-      const { time, persona, textModel, ttsModel } = body;
+      const { time, persona, textModel, ttsModel, alarmType = 'voice', musicModel = 'lyria-3-clip-preview' } = body;
 
       const apiKey = env.GEMINI_API_KEY;
       if (!apiKey) {
@@ -54,6 +54,44 @@ export default {
       const activeTextModel = textModel || 'gemini-3.1-pro-preview';
       const activeTtsModel = ttsModel || 'gemini-2.5-pro-preview-tts';
       
+      if (alarmType === 'music') {
+        let musicPrompt = 'A beautiful, cinematic orchestral piece with soft intimate piano that builds into a sweeping, romantic string climax, evoking a warm, breathtaking sunrise, highly emotional and loving.';
+        if (activePersona.includes('毒舌')) {
+          musicPrompt = 'A chaotic, deafening heavy metal nightmare with blistering electric guitar solos, relentless double-kick blast beats, and a screening, abrasive wall of sound meant to jolt someone out of bed instantly with pure panic.';
+        } else if (activePersona.includes('军训')) {
+          musicPrompt = 'An epic, earth-shattering cinematic battle theme featuring massive war drums, blaring brass sections, a booming choir, and an overwhelmingly intense, terrifyingly magnificent crescendo.';
+        } else if (activePersona.includes('猫咪')) {
+          musicPrompt = 'A wildly eccentric fast-paced electro-swing track with unpredictable glitchy bass drops, chaotic saxophone riffs, and a funky, bouncy groove that feels slightly irritating but undeniably energetic and catchy.';
+        }
+
+        const musicResponse = await ai.models.generateContent({
+          model: musicModel,
+          contents: musicPrompt,
+        });
+
+        const candidate = musicResponse.candidates?.[0];
+        if (!candidate) throw new Error('No candidate returned from Lyria API');
+        
+        const textPart = candidate.content?.parts?.find(p => p.text != null);
+        const alarmText = textPart?.text || musicPrompt;
+
+        const audioPart = candidate.content?.parts?.find(p => p.inlineData != null);
+        if (!audioPart || !audioPart.inlineData) {
+          throw new Error('Lyria response did not contain audio inlineData. Received: ' + JSON.stringify(candidate.content));
+        }
+
+        const finalBase64 = audioPart.inlineData.data || '';
+
+        ctx.waitUntil(env.WAKE_UP_DUDE_KV.put(kvKey, (count + 1).toString(), { expirationTtl: 86400 }));
+
+        return new Response(JSON.stringify({
+          success: true,
+          text: alarmText,
+          audioBase64: finalBase64,
+          audioFormat: 'mp3'
+        }), { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+      }
+
       let personaPrompt = '你是一个毒舌监督员。你的任务是用极其简短、一针见血的话语叫醒用户。风格要严厉、有压迫感。';
       
       if (activePersona.includes('温柔女友')) {
@@ -111,7 +149,8 @@ export default {
       return new Response(JSON.stringify({
         success: true,
         text: alarmText,
-        audioBase64: finalBase64
+        audioBase64: finalBase64,
+        audioFormat: 'wav'
       }), { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } });
 
     } catch (e: any) {

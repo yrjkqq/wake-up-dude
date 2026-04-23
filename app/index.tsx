@@ -11,7 +11,7 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 
-import { getAlarms, addAlarm, updateAlarm, deleteAlarm, toggleAlarm, Alarm } from '@/services/database';
+import { getAlarms, addAlarm, updateAlarm, deleteAlarm, toggleAlarm, Alarm, AlarmType } from '@/services/database';
 import { scheduleAlarm, cancelAlarm } from '@/services/notification-service';
 import { AlarmEditModal } from '@/components/AlarmEditModal';
 
@@ -62,15 +62,15 @@ export default function AlarmListScreen() {
     ]);
   };
 
-  const handleSaveAlarm = async (time: string, persona: string) => {
+  const handleSaveAlarm = async (time: string, persona: string, alarmType: AlarmType) => {
     const days = JSON.stringify([0,1,2,3,4,5,6]);
     if (editingAlarm) {
-      updateAlarm(editingAlarm.id, time, days, persona);
-      const updated = { ...editingAlarm, time, persona, days };
+      updateAlarm(editingAlarm.id, time, days, persona, alarmType);
+      const updated = { ...editingAlarm, time, persona, days, alarmType };
       if (updated.enabled) await scheduleAlarm(updated);
     } else {
-      const id = addAlarm(time, days, persona);
-      const newAlarm: Alarm = { id, time, days, persona, enabled: true, lastAudioUri: null, lastText: null };
+      const id = addAlarm(time, days, persona, alarmType);
+      const newAlarm: Alarm = { id, time, days, persona, alarmType, enabled: true, lastAudioUri: null, lastText: null };
       await scheduleAlarm(newAlarm);
     }
     setIsModalVisible(false);
@@ -92,7 +92,7 @@ export default function AlarmListScreen() {
           {item.time}
         </Text>
         <Text style={[styles.alarmSub, { color: textMuted }]}>
-          {item.persona} • 每天
+          {item.persona} • {item.alarmType === 'music' ? '音乐' : '语音'} • 每天
         </Text>
       </View>
       <View style={styles.alarmActions}>
