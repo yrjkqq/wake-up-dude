@@ -89,9 +89,11 @@ export default function History() {
           {new Intl.DateTimeFormat('zh-CN', { dateStyle: 'short', timeStyle: 'short' }).format(new Date(item.createdAt))}
         </ThemedText>
       </View>
-      <ThemedText style={styles.cardText} numberOfLines={4}>
-        &quot;{item.text}&quot;
-      </ThemedText>
+      {(item.alarmType !== 'music' && /[\u4e00-\u9fa5]/.test(item.text)) && (
+        <ThemedText style={styles.cardText} numberOfLines={4}>
+          &quot;{item.text}&quot;
+        </ThemedText>
+      )}
       <View style={styles.cardActions}>
         <TouchableOpacity style={styles.actionBtn} onPress={() => playAudio(item)}>
           <Ionicons name={playingId === item.id ? 'stop-circle' : 'play-circle'} size={24} color={colors.tint} />

@@ -7,6 +7,7 @@ export interface AlarmRecord {
   text: string;
   audioUri: string;
   createdAt: number;
+  alarmType: AlarmType;
 }
 
 export type AlarmType = 'voice' | 'music';
@@ -34,7 +35,8 @@ if (Platform.OS !== 'web') {
         persona TEXT NOT NULL,
         text TEXT NOT NULL,
         audioUri TEXT NOT NULL,
-        createdAt INTEGER NOT NULL
+        createdAt INTEGER NOT NULL,
+        alarmType TEXT DEFAULT 'voice'
       );
       CREATE TABLE IF NOT EXISTS alarms (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -65,6 +67,12 @@ if (Platform.OS !== 'web') {
     } catch {
       // Ignore if column already exists
     }
+    // Migration: add alarmType to alarm_history
+    try {
+      db.execSync("ALTER TABLE alarm_history ADD COLUMN alarmType TEXT DEFAULT 'voice';");
+    } catch {
+      // Ignore if column already exists
+    }
   } catch (e) {
     console.warn('[DB] SQLite init failed:', e);
   }
@@ -78,16 +86,17 @@ export function initDB() {
   // Logic moved to openDatabaseSync block above for zero-latency availability
 }
 
-export function saveAlarmToHistory(persona: string, text: string, audioUri: string) {
+export function saveAlarmToHistory(persona: string, text: string, audioUri: string, alarmType: AlarmType = 'voice') {
   if (!db) return;
   const statement = db.prepareSync(
-    'INSERT INTO alarm_history (persona, text, audioUri, createdAt) VALUES ($persona, $text, $audioUri, $createdAt)'
+    'INSERT INTO alarm_history (persona, text, audioUri, createdAt, alarmType) VALUES ($persona, $text, $audioUri, $createdAt, $alarmType)'
   );
   statement.executeSync({
     $persona: persona,
     $text: text,
     $audioUri: audioUri,
     $createdAt: Date.now(),
+    $alarmType: alarmType,
   });
 }
 

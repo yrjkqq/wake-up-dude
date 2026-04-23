@@ -71,7 +71,7 @@ function AlarmScreenComponent({ alarmId, onClose }: Props) {
             // 2. RECORD TO HISTORY (Use actual generated text and alarm time as requested)
             const recordTitle = `${alarm.time} · ${alarmPersona}`; 
             const recordText = alarm.lastText || '（AI 语音叫醒服务已启动）';
-            saveAlarmToHistory(recordTitle, recordText, audioUri || 'fallback');
+            saveAlarmToHistory(recordTitle, recordText, audioUri || 'fallback', alarm.alarmType);
           }
         } else {
           audioUri = await AsyncStorage.getItem(LATEST_ALARM_KEY);
