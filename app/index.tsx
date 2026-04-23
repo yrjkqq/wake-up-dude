@@ -6,20 +6,21 @@ import {
   TouchableOpacity,
   Switch,
   Alert,
+  Text,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 
-import { ThemedText } from '@/components/themed-text';
-import { Colors, Spacing } from '@/constants/theme';
-import { useColorScheme } from '@/hooks/use-color-scheme';
 import { getAlarms, addAlarm, updateAlarm, deleteAlarm, toggleAlarm, Alarm } from '@/services/database';
 import { scheduleAlarm, cancelAlarm } from '@/services/notification-service';
 import { AlarmEditModal } from '@/components/AlarmEditModal';
 
 export default function AlarmListScreen() {
-  const colorScheme = useColorScheme() ?? 'light';
-  const colors = Colors[colorScheme];
+  // Enforce pure dark mode aesthetic
+  const backgroundColor = '#000000';
+  const textColor = '#FFFFFF';
+  const textMuted = '#71717A'; // Zinc 500
+  const tintColor = '#E85D04';
 
   const [alarms, setAlarms] = useState<Alarm[]>([]);
   const [editingAlarm, setEditingAlarm] = useState<Alarm | undefined>(undefined);
@@ -62,14 +63,14 @@ export default function AlarmListScreen() {
   };
 
   const handleSaveAlarm = async (time: string, persona: string) => {
-    const days = JSON.stringify([0,1,2,3,4,5,6]); // Default all days
+    const days = JSON.stringify([0,1,2,3,4,5,6]);
     if (editingAlarm) {
       updateAlarm(editingAlarm.id, time, days, persona);
       const updated = { ...editingAlarm, time, persona, days };
       if (updated.enabled) await scheduleAlarm(updated);
     } else {
       const id = addAlarm(time, days, persona);
-      const newAlarm: Alarm = { id, time, days, persona, enabled: true, lastAudioUri: null };
+      const newAlarm: Alarm = { id, time, days, persona, enabled: true, lastAudioUri: null, lastText: null };
       await scheduleAlarm(newAlarm);
     }
     setIsModalVisible(false);
@@ -79,42 +80,49 @@ export default function AlarmListScreen() {
 
   const renderItem = ({ item }: { item: Alarm }) => (
     <TouchableOpacity
-      style={[styles.alarmItem, { backgroundColor: colors.surface, borderColor: colors.border }]}
+      activeOpacity={0.6}
+      style={styles.alarmItem}
       onPress={() => {
         setEditingAlarm(item);
         setIsModalVisible(true);
       }}
     >
       <View style={styles.alarmInfo}>
-        <ThemedText style={styles.alarmTime}>{item.time}</ThemedText>
-        <ThemedText style={[styles.alarmSub, { color: colors.textSecondary }]}>
+        <Text style={[styles.alarmTime, { color: item.enabled ? textColor : textMuted }]}>
+          {item.time}
+        </Text>
+        <Text style={[styles.alarmSub, { color: textMuted }]}>
           {item.persona} • 每天
-        </ThemedText>
+        </Text>
       </View>
       <View style={styles.alarmActions}>
         <Switch
           value={item.enabled}
           onValueChange={(val) => handleToggle(item, val)}
-          trackColor={{ true: colors.tint }}
+          trackColor={{ true: tintColor, false: '#27272A' }}
+          thumbColor="#FFFFFF"
+          ios_backgroundColor="#27272A"
         />
         <TouchableOpacity style={styles.deleteBtn} onPress={() => handleDelete(item.id)}>
-          <Ionicons name="trash-outline" size={20} color={colors.icon} />
+          <Ionicons name="trash-outline" size={20} color="#3F3F46" />
         </TouchableOpacity>
       </View>
     </TouchableOpacity>
   );
 
   return (
-    <SafeAreaView style={{ flex: 1, backgroundColor: colors.background }}>
+    <SafeAreaView style={{ flex: 1, backgroundColor }}>
+
       <View style={styles.header}>
-        <ThemedText style={styles.title}>闹钟</ThemedText>
+        <Text style={[styles.title, { color: textColor }]}>Alarms</Text>
         <TouchableOpacity
+          hitSlop={{ top: 20, bottom: 20, left: 20, right: 20 }}
           onPress={() => {
             setEditingAlarm(undefined);
             setIsModalVisible(true);
           }}
         >
-          <Ionicons name="add" size={32} color={colors.tint} />
+          <Ionicons name="add" size={36} color={tintColor} />
         </TouchableOpacity>
       </View>
 
@@ -123,9 +131,13 @@ export default function AlarmListScreen() {
         keyExtractor={(item) => item.id.toString()}
         renderItem={renderItem}
         contentContainerStyle={styles.listContainer}
+        showsVerticalScrollIndicator={false}
         ListEmptyComponent={() => (
           <View style={styles.emptyState}>
-            <ThemedText style={{ color: colors.textSecondary }}>还没有闹钟哦，点击右上角添加吧</ThemedText>
+            <Text style={[styles.emptyStateTitle, { color: textColor }]}>No Alarms</Text>
+            <Text style={[styles.emptyStateSub, { color: textMuted }]}>
+              Embrace the silence, or set your first wake up call.
+            </Text>
           </View>
         )}
       />
@@ -148,47 +160,63 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    paddingHorizontal: Spacing.lg,
-    paddingVertical: Spacing.md,
+    paddingHorizontal: 24,
+    paddingTop: 16,
+    paddingBottom: 24,
   },
   title: {
-    fontSize: 28,
-    fontWeight: '700',
+    fontSize: 40,
+    fontWeight: '800',
+    letterSpacing: -1,
   },
   listContainer: {
-    padding: Spacing.lg,
+    paddingHorizontal: 24,
     paddingBottom: 100,
   },
   alarmItem: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    padding: Spacing.lg,
-    borderRadius: 16,
-    borderWidth: 1,
-    marginBottom: Spacing.md,
+    paddingVertical: 32,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: '#18181B', // Very subtle separator underneath to avoid floaty feel, but not a full border box
   },
   alarmInfo: {
     flex: 1,
   },
   alarmTime: {
-    fontSize: 32,
+    fontSize: 72,
     fontWeight: '300',
+    letterSpacing: -2,
+    lineHeight: 80,
   },
   alarmSub: {
-    fontSize: 14,
+    fontSize: 15,
+    fontWeight: '500',
     marginTop: 4,
+    letterSpacing: -0.2,
   },
   alarmActions: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: Spacing.md,
+    gap: 16,
   },
   deleteBtn: {
-    padding: 4,
+    padding: 8,
   },
   emptyState: {
-    marginTop: 100,
-    alignItems: 'center',
+    marginTop: 120,
+    alignItems: 'flex-start',
+  },
+  emptyStateTitle: {
+    fontSize: 32,
+    fontWeight: '700',
+    letterSpacing: -0.5,
+    marginBottom: 12,
+  },
+  emptyStateSub: {
+    fontSize: 16,
+    lineHeight: 24,
+    maxWidth: '80%',
   },
 });

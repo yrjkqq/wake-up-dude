@@ -98,7 +98,7 @@ export default function RootLayout() {
         <Tabs.Screen name="history" options={{ title: '历史', tabBarIcon: ({ color }) => <TabBarIcon name="list" color={color} /> }} />
         <Tabs.Screen name="settings" options={{ title: '设置', tabBarIcon: ({ color }) => <TabBarIcon name="settings" color={color} /> }} />
       </Tabs>
-      <StatusBar style="auto" />
+      <StatusBar style="light" />
 
       {/* Render AlarmScreen over the entire app when alarm triggers */}
       <Modal visible={isShowingAlarm} animationType="fade" transparent={false}>

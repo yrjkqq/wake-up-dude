@@ -7,7 +7,7 @@ import notifee, {
   TriggerType,
 } from '@notifee/react-native';
 import { Platform } from 'react-native';
-import { Alarm } from './database';
+import { Alarm, addDebugLog } from './database';
 import { generateAlarmAudioForId, cancelAlarmGeneration } from './ai-service';
 
 const ALARM_CHANNEL_ID = 'alarm-channel-notifee';
@@ -88,11 +88,14 @@ export async function scheduleAlarm(alarm: Alarm): Promise<void> {
   // 1. Schedule AI Generation Trigger (Silent)
   if (genTriggerDate <= new Date()) {
     // If alarm is less than 1h away, generate immediately in the background
+    addDebugLog('Schedule', `Alarm ${alarm.id} (${alarm.time}): AI gen time already passed, generating immediately`);
     generateAlarmAudioForId(alarm.id).catch((e: Error) => {
       if (e.name === 'AbortError' || e.message?.includes('Aborted')) {
         console.log(`[Notifee] Generation for alarm ${alarm.id} aborted (new request pending).`);
+        addDebugLog('Schedule', `Alarm ${alarm.id}: AI gen aborted (new request pending)`, 'warn');
       } else {
         console.error('[Notifee] Immediate generation failed:', e);
+        addDebugLog('Schedule', `Alarm ${alarm.id}: Immediate AI gen FAILED: ${e.message}`, 'error');
       }
     });
   } else {
@@ -123,6 +126,7 @@ export async function scheduleAlarm(alarm: Alarm): Promise<void> {
       },
       genTrigger
     );
+    addDebugLog('Schedule', `Alarm ${alarm.id}: AI gen trigger scheduled at ${genTriggerDate.toLocaleTimeString()} (id: gen_${alarm.id}_${genTimestamp})`);
   }
 
   // 2. Schedule Actual Alarm Trigger (Loud)
@@ -162,6 +166,7 @@ export async function scheduleAlarm(alarm: Alarm): Promise<void> {
     `[Notifee] Scheduled Alarm ${alarm.id} at ${triggerDate.toLocaleTimeString()}. ` +
     `AI Gen scheduled at ${genTriggerDate.toLocaleTimeString()}.`
   );
+  addDebugLog('Schedule', `✅ Alarm ${alarm.id} (${alarm.time}) scheduled. Trigger: ${triggerDate.toISOString()}, AI Gen: ${genTriggerDate.toISOString()}`);
 }
 
 /**
@@ -172,13 +177,16 @@ export async function cancelAlarm(alarmId: number): Promise<void> {
   
   // Surgical cleanup of any existing prep trigger notifications for this ID
   const triggers = await notifee.getTriggerNotificationIds();
+  const cancelledGenIds: string[] = [];
   for (const id of triggers) {
     if (id.startsWith(`gen_${alarmId}_`)) {
       await notifee.cancelNotification(id);
+      cancelledGenIds.push(id);
     }
   }
 
   await notifee.cancelNotification(`alarm_${alarmId}`);
+  addDebugLog('Cancel', `Alarm ${alarmId} cancelled. Removed triggers: alarm_${alarmId}${cancelledGenIds.length ? ', ' + cancelledGenIds.join(', ') : ''}`);
 }
 
 /**
@@ -186,6 +194,7 @@ export async function cancelAlarm(alarmId: number): Promise<void> {
  */
 export async function cancelAllAlarms(): Promise<void> {
   await notifee.cancelAllNotifications();
+  addDebugLog('Cancel', 'All alarms cancelled');
   console.log('[Notifee] All alarms cancelled');
 }
 

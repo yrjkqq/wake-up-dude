@@ -42,6 +42,13 @@ if (Platform.OS !== 'web') {
         lastAudioUri TEXT,
         lastText TEXT
       );
+      CREATE TABLE IF NOT EXISTS debug_logs (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        timestamp INTEGER NOT NULL,
+        tag TEXT NOT NULL,
+        message TEXT NOT NULL,
+        level TEXT NOT NULL DEFAULT 'info'
+      );
     `);
     // Migration: add lastText if missing on existing installs
     try {
@@ -146,4 +153,55 @@ export function deleteAlarm(id: number) {
   if (!db) return;
   const statement = db.prepareSync('DELETE FROM alarms WHERE id = $id');
   statement.executeSync({ $id: id });
+}
+
+// --- Debug Logging ---
+
+export interface DebugLog {
+  id: number;
+  timestamp: number;
+  tag: string;
+  message: string;
+  level: string;
+}
+
+/**
+ * Persist a debug log entry to SQLite.
+ * Unlike console.log, these survive app kills and can be reviewed the next day.
+ */
+export function addDebugLog(tag: string, message: string, level: 'info' | 'warn' | 'error' = 'info') {
+  if (!db) return;
+  try {
+    const statement = db.prepareSync(
+      'INSERT INTO debug_logs (timestamp, tag, message, level) VALUES ($ts, $tag, $msg, $level)'
+    );
+    statement.executeSync({
+      $ts: Date.now(),
+      $tag: tag,
+      $msg: message,
+      $level: level,
+    });
+  } catch (e) {
+    // Fallback to console if DB write fails
+    console.error('[DebugLog] Failed to write log:', e);
+  }
+}
+
+/**
+ * Get recent debug logs, newest first.
+ */
+export function getDebugLogs(limit: number = 100): DebugLog[] {
+  if (!db) return [];
+  return db.getAllSync<DebugLog>(
+    'SELECT * FROM debug_logs ORDER BY timestamp DESC LIMIT $limit',
+    { $limit: limit }
+  );
+}
+
+/**
+ * Clear all debug logs.
+ */
+export function clearDebugLogs() {
+  if (!db) return;
+  db.execSync('DELETE FROM debug_logs');
 }

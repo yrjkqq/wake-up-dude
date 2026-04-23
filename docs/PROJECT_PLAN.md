@@ -67,7 +67,15 @@
 * [x] 重构 `app/index.tsx` 与 `_layout.tsx` 主屏逻辑，移除旧监听器，利用 `getDisplayedNotifications` 实现被冻结与唤醒状态下的防抖核验与主动 UI 刷新。
 * [x] 重新构建 Dev Client 原生包并进行熄屏/后台/彻底划杀状态下的秒级打盹穿透唤醒大考。
 
-### Sprint 7: 全局 UI 重构 (Visual Overhaul)
+### Sprint 7.1: 状态栏修复 + 调试日志系统 ✅
+> **前因：** 构建后的 APK 在 Android 设备上状态栏区域出现白色背景 + 白色字体导致完全不可读。排查发现 `edgeToEdgeEnabled: true` 使系统状态栏透明，而代码中存在 3 处互相冲突的 `StatusBar` 组件覆盖；此外闹钟通知在隔夜场景下不稳定（设定了早上 8 点但未触发），因 Cloudflare 被墙导致 VPN 长时间运行后可能断连，且缺乏持久化日志无法事后排查。
+
+* [x] **暗色主题统一**：`app.json` 强制 `userInterfaceStyle: "dark"`，`_layout.tsx` 统一为唯一 `<StatusBar style="light" />`，移除 `index.tsx` 中冲突的 RN StatusBar。
+* [x] **持久化调试日志**：在 `expo-sqlite` 中新增 `debug_logs` 表，提供 `addDebugLog(tag, message, level)` API，日志不随 app 被 kill 丢失。
+* [x] **全链路日志覆盖**：在 `notification-service.ts`（闹钟调度/取消）、`ai-service.ts`（Cloudflare 请求开始→响应→成功/失败，含 VPN/GFW 网络断连特殊检测）、`index.tsx`（Foreground Service 生命周期）植入持久化日志。
+* [x] **Settings 调试诊断面板**：新增「查看已排期闹钟触发器」和「调试日志查看器」（全屏 Modal，按时间倒序，彩色等级指示条）。
+
+### Sprint 7.2: 全局 UI 重构 (Visual Overhaul)
 > 在 Sprint 6 确认功能稳定后，对全部页面进行一次性视觉升级。此时组件结构已确定（主屏 + 全屏闹钟 + 历史 + 设置），可以统一设计语言，避免返工。
 
 * [ ] 重设计主屏（时间选择器、闹钟按钮、状态提示区域）。

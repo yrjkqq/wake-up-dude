@@ -1,5 +1,5 @@
 import * as FileSystem from 'expo-file-system/legacy';
-import { getAlarms, updateAlarmAudio } from './database';
+import { getAlarms, updateAlarmAudio, addDebugLog } from './database';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
 export const LATEST_ALARM_KEY = 'LATEST_ALARM_FILE_URI';
@@ -39,6 +39,8 @@ export async function generateAlarmAudio(
   console.log(`[AI Service] Starting network fetch for ${timeStr}...`);
 
   try {
+    addDebugLog('AI-Net', `🚀 开始请求 Cloudflare: ${apiUrl} | time=${timeStr} persona=${persona} textModel=${textModel} ttsModel=${ttsModel}`);
+    const fetchStartTime = Date.now();
     const response = await fetch(apiUrl, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -47,14 +49,19 @@ export async function generateAlarmAudio(
     });
 
     if (!response.ok) {
-      throw new Error(`API Server error: ${response.status} ${response.statusText}`);
+      const errMsg = `API Server error: ${response.status} ${response.statusText}`;
+      addDebugLog('AI-Net', `❌ ${errMsg} (url: ${apiUrl})`, 'error');
+      throw new Error(errMsg);
     }
 
     console.log(`[AI Service] Response headers received. Parsing JSON payload...`);
+    addDebugLog('AI-Net', `响应收到 ${timeStr}. Status: ${response.status}, 耗时: ${((Date.now() - fetchStartTime) / 1000).toFixed(1)}s`);
     const data = await response.json();
     
     if (!data.success) {
-      throw new Error(data.error || 'Failed to generate alarm from API');
+      const errMsg = data.error || 'Failed to generate alarm from API';
+      addDebugLog('AI-Net', `❌ API returned failure: ${errMsg}`, 'error');
+      throw new Error(errMsg);
     }
 
     const { audioBase64, text } = data;
@@ -66,8 +73,19 @@ export async function generateAlarmAudio(
       encoding: 'base64',
     });
 
+    addDebugLog('AI-Net', `✅ Audio saved for ${timeStr}. Size: ${Math.round(audioBase64.length / 1024)} KB`);
     console.log('[AI Service] Generated dynamic alarm audio to:', fileUri);
     return { text, audioUri: fileUri };
+  } catch (e: any) {
+    // Capture network-level failures (VPN disconnect, DNS, timeout, etc.)
+    if (e.name === 'AbortError') {
+      addDebugLog('AI-Net', `⏱️ Request aborted/timed out for ${timeStr}`, 'warn');
+    } else if (e.message?.includes('Network request failed') || e.message?.includes('Failed to fetch')) {
+      addDebugLog('AI-Net', `🌐 Network failure (possible VPN/GFW issue): ${e.message}`, 'error');
+    } else {
+      addDebugLog('AI-Net', `❌ Unexpected error for ${timeStr}: ${e.message}`, 'error');
+    }
+    throw e;
   } finally {
     clearTimeout(timeoutId);
   }
@@ -90,14 +108,20 @@ export async function generateAlarmAudioForId(alarmId: number): Promise<void> {
     const alarm = alarms.find(a => a.id === alarmId);
     
     if (!alarm) {
+      addDebugLog('AI-Gen', `Alarm ID ${alarmId} not found in DB`, 'error');
       throw new Error(`Alarm with ID ${alarmId} not found in DB`);
     }
 
+    addDebugLog('AI-Gen', `Starting generation for Alarm ${alarmId} (${alarm.time}, ${alarm.persona})`);
     console.log(`[AI Service] Generating content for ${alarm.time} (${alarm.persona}). Timeout: 90s`);
     const { text, audioUri } = await generateAlarmAudio(alarm.time, alarm.persona, controller.signal);
     
     // Update the database with both the new local file URI and the AI text
     updateAlarmAudio(alarmId, audioUri, text);
+    addDebugLog('AI-Gen', `✅ Generation complete for Alarm ${alarmId}. Audio: ${audioUri}`);
+  } catch (e: any) {
+    addDebugLog('AI-Gen', `❌ Generation failed for Alarm ${alarmId}: ${e.message}`, 'error');
+    throw e;
   } finally {
     // Clean up
     if (activeControllers.get(alarmId) === controller) {
