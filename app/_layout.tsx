@@ -9,12 +9,25 @@ import { useColorScheme } from '@/hooks/use-color-scheme';
 import notifee, { EventType } from '@notifee/react-native';
 import { Modal, AppState } from 'react-native';
 
+import { rescheduleAlarm } from '@/services/notification-service';
+import { addDebugLog } from '@/services/database';
 import AlarmScreenComponent from '@/components/AlarmScreen';
 
 // Handle Notifee events when app is in background or killed state
 notifee.onBackgroundEvent(async ({ type, detail }) => {
   if (type === EventType.PRESS || type === EventType.ACTION_PRESS) {
-    console.log('[Notifee Background] Event:', type, detail.notification?.id);
+    addDebugLog('BGEvent', `Background event: type=${type}, notifId=${detail.notification?.id}`);
+  }
+  // Reschedule alarm for next occurrence when triggered in background
+  if (
+    (type === EventType.DELIVERED || type === EventType.PRESS) &&
+    detail.notification?.android?.category === 'alarm'
+  ) {
+    const aid = detail.notification.data?.alarmId;
+    if (typeof aid === 'string') {
+      addDebugLog('BGEvent', `Alarm ${aid} triggered in background (type=${type}), initiating reschedule`);
+      await rescheduleAlarm(parseInt(aid, 10));
+    }
   }
 });
 
@@ -33,6 +46,7 @@ export default function RootLayout() {
       const initial = await notifee.getInitialNotification();
       if (initial?.notification?.android?.category === 'alarm') {
         const aid = initial.notification.data?.alarmId;
+        addDebugLog('AlarmTrigger', `Cold start from alarm, alarmId=${aid}, notifId=${initial.notification.id}`);
         if (typeof aid === 'string') setSelectedAlarmId(parseInt(aid, 10));
         
         setIsShowingAlarm(true);
@@ -47,6 +61,7 @@ export default function RootLayout() {
       const alarmNotif = displayed.find(n => n.notification.android?.category === 'alarm');
       if (alarmNotif) {
         const aid = alarmNotif.notification.data?.alarmId;
+        addDebugLog('AlarmTrigger', `Found displayed alarm notification, alarmId=${aid}, notifId=${alarmNotif.id}`);
         if (typeof aid === 'string') setSelectedAlarmId(parseInt(aid, 10));
 
         setIsShowingAlarm(true);
@@ -73,6 +88,7 @@ export default function RootLayout() {
         detail.notification?.android?.category === 'alarm'
       ) {
         const aid = detail.notification.data?.alarmId;
+        addDebugLog('AlarmTrigger', `Foreground alarm event: type=${type}, alarmId=${aid}, notifId=${detail.notification.id}`);
         if (typeof aid === 'string') setSelectedAlarmId(parseInt(aid, 10));
 
         setIsShowingAlarm(true);

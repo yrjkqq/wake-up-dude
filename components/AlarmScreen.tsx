@@ -19,7 +19,8 @@ import notifee from '@notifee/react-native';
 import SwipeToStop from '@/components/SwipeToStop';
 import { ThemedText } from '@/components/themed-text';
 import { LATEST_ALARM_KEY } from '@/services/ai-service';
-import { getAlarms, saveAlarmToHistory } from '@/services/database';
+import { getAlarms, saveAlarmToHistory, addDebugLog } from '@/services/database';
+import { rescheduleAlarm } from '@/services/notification-service';
 
 interface Props {
   alarmId?: number;
@@ -62,6 +63,7 @@ function AlarmScreenComponent({ alarmId, onClose }: Props) {
         let alarmPersona = '🌸 温柔女友';
         
         if (alarmId !== undefined) {
+          addDebugLog('AlarmScreen', `Alarm screen mounted for alarmId=${alarmId}, loading audio`);
           const alarm = getAlarms().find((a: any) => a.id === alarmId);
           if (alarm) {
             audioUri = alarm.lastAudioUri;
@@ -106,6 +108,7 @@ function AlarmScreenComponent({ alarmId, onClose }: Props) {
         await soundToPlay.setIsLoopingAsync(true);
         await soundToPlay.setVolumeAsync(1.0);
         await soundToPlay.playAsync();
+        addDebugLog('AlarmScreen', `Audio playback started for alarmId=${alarmId}, looping=true`);
       } catch (error) {
         console.error('[AlarmScreen] Failed to play audio:', error);
       }
@@ -121,6 +124,7 @@ function AlarmScreenComponent({ alarmId, onClose }: Props) {
   }, [alarmId]);
 
   const handleStop = useCallback(async () => {
+    addDebugLog('AlarmScreen', `User dismissed alarm (alarmId=${alarmId}), stopping audio`);
     setIsStopped(true);
     if (soundRef.current) {
       try {
@@ -130,7 +134,19 @@ function AlarmScreenComponent({ alarmId, onClose }: Props) {
       soundRef.current = null;
     }
     await notifee.cancelAllNotifications();
-  }, []);
+    addDebugLog('AlarmScreen', `All notifications cancelled, initiating reschedule for alarmId=${alarmId}`);
+
+    // Reschedule alarm for next occurrence (daily/weekly repeat)
+    if (alarmId !== undefined) {
+      try {
+        await rescheduleAlarm(alarmId);
+        addDebugLog('AlarmScreen', `Reschedule completed for alarmId=${alarmId}`);
+      } catch (e: any) {
+        addDebugLog('AlarmScreen', `Reschedule FAILED for alarmId=${alarmId}: ${e.message}`, 'error');
+        console.error('[AlarmScreen] Failed to reschedule alarm:', e);
+      }
+    }
+  }, [alarmId]);
 
   const STATUS_BAR_HEIGHT = Platform.OS === 'android' ? StatusBar.currentHeight || 0 : 0;
 

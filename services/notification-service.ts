@@ -7,7 +7,7 @@ import notifee, {
   TriggerType,
 } from '@notifee/react-native';
 import { Platform } from 'react-native';
-import { Alarm, addDebugLog } from './database';
+import { Alarm, getAlarmById, addDebugLog } from './database';
 import { generateAlarmAudioForId, cancelAlarmGeneration } from './ai-service';
 
 const ALARM_CHANNEL_ID = 'alarm-channel-notifee';
@@ -58,16 +58,39 @@ export async function openAlarmSettings(): Promise<void> {
 
 /**
  * Helper to calculate the next occurrence of a HH:mm time.
+ * If `days` is provided (JSON array of day indices 0=Sun..6=Sat),
+ * it skips forward to the next matching weekday.
+ * If `days` is empty or "[]", the alarm fires every day (next available).
  */
-function getNextTriggerDate(timeStr: string): Date {
+function getNextTriggerDate(timeStr: string, days?: string): Date {
   const [hours, minutes] = timeStr.split(':').map(Number);
   const now = new Date();
   const trigger = new Date();
   trigger.setHours(hours, minutes, 0, 0);
 
+  // If trigger time has already passed today, start from tomorrow
   if (trigger <= now) {
     trigger.setDate(trigger.getDate() + 1);
   }
+
+  // Parse enabled days (0=Sun..6=Sat). Empty array = every day.
+  let enabledDays: number[] = [];
+  try {
+    enabledDays = days ? JSON.parse(days) : [];
+  } catch {
+    enabledDays = [];
+  }
+
+  // If specific days are configured, skip forward to the next matching weekday
+  if (enabledDays.length > 0) {
+    for (let i = 0; i < 7; i++) {
+      if (enabledDays.includes(trigger.getDay())) {
+        return trigger;
+      }
+      trigger.setDate(trigger.getDate() + 1);
+    }
+  }
+
   return trigger;
 }
 
@@ -77,12 +100,19 @@ function getNextTriggerDate(timeStr: string): Date {
  * 2. Actual Alarm Trigger (T) - Loud notification
  */
 export async function scheduleAlarm(alarm: Alarm): Promise<void> {
+  addDebugLog('Schedule', `Alarm ${alarm.id} (${alarm.time}): scheduleAlarm() called, days=${alarm.days}, enabled=${alarm.enabled}`);
+
   // Cancel previous triggers for this specific alarm ID if they exist
   await cancelAlarm(alarm.id);
 
-  if (!alarm.enabled) return;
+  if (!alarm.enabled) {
+    addDebugLog('Schedule', `Alarm ${alarm.id}: skipped (disabled)`);
+    return;
+  }
 
-  const triggerDate = getNextTriggerDate(alarm.time);
+  const triggerDate = getNextTriggerDate(alarm.time, alarm.days);
+  const dayNames = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+  addDebugLog('Schedule', `Alarm ${alarm.id}: next trigger = ${dayNames[triggerDate.getDay()]} ${triggerDate.toLocaleString()}`);
   const genTriggerDate = new Date(triggerDate.getTime() - 60 * 60 * 1000); // 1 hour before
 
   // 1. Schedule AI Generation Trigger (Silent)
@@ -161,12 +191,33 @@ export async function scheduleAlarm(alarm: Alarm): Promise<void> {
     },
     alarmTrigger
   );
+  addDebugLog('Schedule', `Alarm ${alarm.id}: alarm trigger created (id: alarm_${alarm.id}, ts: ${triggerDate.getTime()})`);
 
-  console.log(
-    `[Notifee] Scheduled Alarm ${alarm.id} at ${triggerDate.toLocaleTimeString()}. ` +
-    `AI Gen scheduled at ${genTriggerDate.toLocaleTimeString()}.`
-  );
-  addDebugLog('Schedule', `✅ Alarm ${alarm.id} (${alarm.time}) scheduled. Trigger: ${triggerDate.toISOString()}, AI Gen: ${genTriggerDate.toISOString()}`);
+  // Verify triggers were actually registered with the OS
+  const registeredIds = await notifee.getTriggerNotificationIds();
+  const thisAlarmTriggers = registeredIds.filter(id => id.includes(alarm.id.toString()));
+  addDebugLog('Schedule', `✅ Alarm ${alarm.id} (${alarm.time}) fully scheduled. Registered triggers: [${thisAlarmTriggers.join(', ')}]. Trigger: ${triggerDate.toISOString()}, AI Gen: ${genTriggerDate.toISOString()}`);
+}
+
+/**
+ * Reschedule an alarm for its next occurrence.
+ * Called after an alarm fires to enable daily/weekly repetition.
+ */
+export async function rescheduleAlarm(alarmId: number): Promise<void> {
+  addDebugLog('Reschedule', `rescheduleAlarm(${alarmId}) called`);
+  const alarm = getAlarmById(alarmId);
+  if (!alarm) {
+    addDebugLog('Reschedule', `Alarm ${alarmId} not found in DB, skipping reschedule`, 'warn');
+    return;
+  }
+  if (!alarm.enabled) {
+    addDebugLog('Reschedule', `Alarm ${alarmId} is disabled, skipping reschedule`);
+    return;
+  }
+
+  addDebugLog('Reschedule', `Alarm ${alarmId} (${alarm.time}, days=${alarm.days}): calling scheduleAlarm for next occurrence`);
+  await scheduleAlarm(alarm);
+  addDebugLog('Reschedule', `✅ Alarm ${alarmId} reschedule complete`);
 }
 
 /**

@@ -130,6 +130,19 @@ export function getAlarms(): Alarm[] {
   }));
 }
 
+export function getAlarmById(id: number): Alarm | null {
+  if (!db) return null;
+  const row = db.getFirstSync<any>('SELECT * FROM alarms WHERE id = $id', { $id: id });
+  if (!row) return null;
+  return {
+    ...row,
+    enabled: !!row.enabled,
+    alarmType: row.alarmType || 'voice',
+    lastAudioUri: row.lastAudioUri || null,
+    lastText: row.lastText || null,
+  };
+}
+
 export function addAlarm(time: string, days: string, persona: string, alarmType: AlarmType = 'voice'): number {
   if (!db) return -1;
   const statement = db.prepareSync(
