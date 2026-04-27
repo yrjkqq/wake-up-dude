@@ -1,58 +1,98 @@
-# 项目规划：Wake up dude (已安全生产化)
+# Project Plan: Wake up dude (Safely Productionized)
 
-## 1. 项目愿景 (Vision)
-**"Wake up dude"** 是一款带有强烈个人风格的 AI 唤醒闹钟应用。
-* **核心痛点解决：** 针对早上起床困难的问题，摒弃传统枯燥的闹铃，使用 AI 每天生成高度随机、带有情绪价值（警告、毒舌、或硬核励志）的专属语音将用户"骂"醒。
-* **技术演练目标：** 作为从前端向移动端跨平台（React Native）延伸的实战练手项目，深度整合当前最前沿的 AI大模型能力（LLM + TTS），并在完成 MVP 后成功构建分发级包体（APK + 商店配置），是一份极具含金量的应用级工程履历作品。
+## 1. Vision
+**"Wake up dude"** is an AI wake-up alarm app with a strong personal style.
+*   **Solving the Core Pain Point:** Aiming at the difficulty of getting up in the morning, it abandons the traditional boring alarm clock and uses AI to generate highly random, exclusive voices with emotional value (warning, toxic, or hardcore motivational) to "scold" the user awake every day.
+*   **Technical Exercise Goal:** As a practical exercise extending from frontend to mobile cross-platform (React Native), it deeply integrates the current cutting-edge AI large model capabilities (LLM + TTS), and successfully builds a distribution-level package (APK + store configuration) after completing the MVP. It is a highly valuable application-level engineering resume piece.
 
-## 2. 核心架构设计 (Architecture)
+## 2. Core Architecture Design
 
-### 2.1 最终生产架构：「即时生成 + 边缘计算防刷 + 本地持久化推送」
-* **步骤一 (设定闹钟)：** 用户选择时间并点击"开启闹钟"。前端立即发起请求到部署在高可用网络节点上的 Cloudflare Worker 云端代理。
-* **步骤二 (边缘计费拦截)：** Cloudflare Worker 拦截请求，提取 `CF-Connecting-IP`，验证该设备今日调用次数是否超过免费阈值（现配置为每天 3 次封顶）。如果合规，则由 Worker 携带服务器隐藏的 API 密钥向 Google Gemini 发出双引擎请求。
-* **步骤三 (AI 双轨生成)：** LLM 生成短文案，紧接着 TTS 生成音频流 PCM，在云端 V8 隔离核中利用兼容层转码为带有 Header 校验的标准 WAV 格式 `Base64` 返回手机。
-* **步骤四 (本地库沉淀)：** 回传手机后，将 `Base64` 落盘为沙盒缓存文件，同时生成前端状态切片并注入 `Expo-SQLite` 关系型数据库，用于随时切入“历史大赏”页进行回味。
-* **步骤五 (准点唤醒与保活)：** 注册系统原生 Local Notification。闹钟到达时间触发，应用在后台解封该缓存地址执行 `expo-av` 播放。利用极强侵入性的循环音频物理播放机制将用户炸醒，直至其通过拉满底栏 `<SwipeToStop>` 物理滑块方可解锁。
+### 2.1 Final Production Architecture: "Instant Generation + Edge Computing Anti-abuse + Local Persistent Push"
+*   **Step 1 (Set Alarm):** The user selects the time and clicks "Turn on alarm". The frontend immediately initiates a request to the Cloudflare Worker cloud proxy deployed on high-availability network nodes.
+*   **Step 2 (Edge Billing Interception):** Cloudflare Worker intercepts the request, extracts `CF-Connecting-IP`, and verifies whether the device's daily call count exceeds the free threshold (currently configured to cap at 3 times a day). If compliant, the Worker carries the API key hidden on the server to issue a dual-engine request to Google Gemini.
+*   **Step 3 (AI Dual-Track Generation):** The LLM generates the short copy, and then the TTS generates the audio stream PCM. It is transcoded into a standard WAV format `Base64` with Header verification in the cloud V8 isolate core using a compatibility layer, and returned to the phone.
+*   **Step 4 (Local Database Accumulation):** After returning to the phone, the `Base64` is persisted as a sandbox cache file. At the same time, a frontend state slice is generated and injected into the `Expo-SQLite` relational database, which is used to cut into the "History Awards" page for reminiscing at any time.
+*   **Step 5 (Punctual Wake-up and Keep-alive):** Registers a system-native Local Notification. When the alarm reaches the time, it triggers, and the app unseals this cache address in the background to execute `expo-av` playback. It uses a highly intrusive loop audio physical playback mechanism to blast the user awake until they unlock it by fully dragging the bottom bar `<SwipeToStop>` physical slider.
 
-### 2.2 进阶架构：「服务端预生成 + 静默推送下载」（规划中）
-引入后端 cron job，服务端每晚为用户预生成音频，实现"设一次闹钟，每天自动更新内容"。
+### 2.2 Advanced Architecture: "Server Pre-generation + Silent Push Download" (Planned)
+Introduce a backend cron job to pre-generate audio for users every night, achieving "set the alarm once, automatically update content every day".
 
-## 3. 技术栈选型 (Tech Stack)
-* **前端引擎：** Expo / React Native (完全剥离了原生的复杂环境配置)。
-* **路由框架：** Expo Router (三栏结构: Index、History、Settings)。
-* **核心 SDK：** `expo-notifications`, `expo-file-system`, `expo-sqlite`, `expo-av`, `expo-haptics`。
-* **边缘防线 (Security Gateway)：** Cloudflare Workers + KV 持久化键值数据库。
-* **双核大模型驱动：** Google Gemini 2.5 Flash (或更强的文本推理层 3.1 Pro) + Gemini Voice Engine。
+## 3. Tech Stack Selection
+*   **Frontend Engine:** Expo / React Native (Completely strips away the complex native environment configuration).
+*   **Routing Framework:** Expo Router (Three-column structure: Index, History, Settings).
+*   **Core SDKs:** `expo-notifications`, `expo-file-system`, `expo-sqlite`, `expo-av`, `expo-haptics`.
+*   **Security Gateway:** Cloudflare Workers + KV Persistent Key-Value Database.
+*   **Dual-Core Large Model Drive:** Google Gemini 2.5 Flash (or the stronger text reasoning layer 3.1 Pro) + Gemini Voice Engine.
 
-## 4. 核心亮点：AI Prompt 设计 (The "Soul")
-不同的人设选项不仅更换了生成 Prompt，还通过条件容错分支（如针对输入 `🌸 温柔女友` 时底层用 `.includes()` 做包含匹配拦截）自动挂载性别声线属性完全不同的底层 TTS 资源配音（如 `Aoede` 专属女声大模型引擎，`Puck` 常规暴躁男声大模型引擎）。
+## 4. Core Highlight: AI Prompt Design (The "Soul")
+Different persona options not only change the generation Prompt but also automatically mount underlying TTS resource dubbings with completely different gender voice attributes through conditional fault-tolerant branches (e.g., when the input is `🌸 Gentle Girlfriend`, the bottom layer uses `.includes()` for inclusion matching interception) (e.g., `Aoede` exclusive female voice large model engine, `Puck` conventional grumpy male voice large model engine).
 
-## 5. API 商业安全演进史 (The Evolution of Security)
-1. **初期（裸奔期）：** App 直连通讯，致命级安全隐患，一旦上传商店 API Key 即被解包盗取。
-2. **中期（半托管开发态）：** 迁入 Expo 本地后端的 `app/api/gen-alarm+api.ts` 路由节点测试，完成秘钥隐藏概念，但因为打出独立客户端后失去本机 Node 环境，彻底瘫痪崩溃。
-3. **最终期（防御塔级独立发布态）：** 斩除项目中遗留的 API 代理废码和 `.env` 各种密文。新建分离式的 `cloudflare-worker` 进行 Serverless 微服务托管，并开启严酷的 IP 发包沙箱额度拦截（3次/天）。所有流量无条件指向 `.workers.dev`，从架构根基层消灭了账单爆表危机。
+## 5. API Commercial Security Evolution History
+1.  **Early Stage (Streaking Period):** App direct connection communication, a fatal level of security hidden danger. Once the API Key is uploaded to the store, it will be unpacked and stolen.
+2.  **Middle Stage (Semi-Managed Development State):** Migrated to the `app/api/gen-alarm+api.ts` routing node of the Expo local backend for testing, completing the concept of key hiding. However, because the independent client lost the local Node environment after being built, it completely paralyzed and crashed.
+3.  **Final Stage (Defense Tower Level Independent Release State):** Eliminated the legacy API proxy dead code and various ciphertexts of `.env` in the project. Created a separated `cloudflare-worker` for Serverless microservice hosting, and turned on a rigorous IP packet sandbox quota interception (3 times/day). All traffic points unconditionally to `.workers.dev`, eliminating the billing explosion crisis from the architectural root.
 
-## 6. 开发迭代打卡 (Sprints Roadmap)
+## 6. Development Iteration Sprints (Roadmap)
 
-### Sprint 1 & 2: 项目初始化与本地通知验证 ✅
-* [x] 搭建极简 UI 与 Expo 工程核心。
-* [x] 获取 Android 层面 Local Notification 授权，验证沙盒回放音频注册时滞。
+### Sprint 1 & 2: Project Initialization & Local Notification Verification ✅
+*   [x] Build minimalistic UI and Expo project core.
+*   [x] Obtain Android-level Local Notification authorization and verify the registration lag of sandbox playback audio.
 
-### Sprint 3: 接入 AI 大脑 + 基础 API 链路 ✅
-* [x] 跑通 LLM → TTS 链路，完成服务端直接向端侧抛出多模态音频流块。
-* [x] 搭建跨环境通信接口，完成闭环。
+### Sprint 3: Access AI Brain + Base API Link ✅
+*   [x] Run through the LLM → TTS link, complete the server throwing multimodal audio stream blocks directly to the device side.
+*   [x] Build a cross-environment communication interface to complete the closed loop.
 
-### Sprint 4: 产品化与商店打磨 (Product Polish) ✅
-* [x] **架构变异**：引入 `expo-router` 重构为现代 App 标准的底部三 Tab (`index`, `history`, `settings`)。
-* [x] **数据沉淀**：引入 `expo-sqlite` 持久化保留含有历史设定时间戳（如 `[13:21] 🌸 温柔女友`）的历史生成记录清单，并在前端暴露支持独立重放与单清内存销毁交互。
-* [x] **跨模态自由降配**：接管 AsyncStorage 实现前沿模型的弹性调节池（允许用户单独更换文本大脑脑区与 TTS 引擎算区）。
-* [x] **用户体验重塑**：从简单的"点击停止"按钮升维至 `PanResponder` 底层拖动解锁 UX 以及高仿物理真实的 `expo-haptics` 震动闭环，同时修复了强杀 UI 组件造成的死亡音频死循环缺陷。
-* [x] **应用元数据补齐**：打包原生 App `app.json` 声明设置（名字设为 Wake Up Dude）、向量 Icon UI 配置覆盖，提供隐私政策与发布。
+### Sprint 4: Productization & Store Polish ✅
+*   [x] **Architecture Mutation**: Introduced `expo-router` to refactor into a modern App standard bottom three Tab (`index`, `history`, `settings`).
+*   [x] **Data Accumulation**: Introduced `expo-sqlite` to persistently retain a historical generation record list containing historical setting timestamps (e.g., `[13:21] 🌸 Gentle Girlfriend`), and exposed it on the frontend to support independent replay and single-clear memory destruction interaction.
+*   [x] **Cross-modal Free Downgrade**: Took over AsyncStorage to implement an elastic adjustment pool for cutting-edge models (allowing users to separately replace the text brain area and the TTS engine calculation area).
+*   [x] **User Experience Reshaping**: Upgraded from a simple "click to stop" button to a `PanResponder` bottom drag unlock UX and a highly simulated physical real `expo-haptics` vibration closed loop, while fixing the dead audio dead loop defect caused by force-killing UI components.
+*   [x] **Application Metadata Completion**: Packaged native App `app.json` declaration settings (name set to Wake Up Dude), vector Icon UI configuration coverage, provided privacy policy and release.
 
-### Sprint 5: 边缘云计算与网关安全层 (Production Gateway) ✅
-* [x] **基础设施大挪移**：创建并行微服务 `cloudflare-worker`，并部署上线至具有极高负载拦截吞吐的外网（`wake-up-dude-api.workers.dev`）。
-* [x] **鉴权沙箱化**：大模型 `GEMINI_API_KEY` 完全被剥夺后只储于 Cloudflare Wrangler 系统加密硬件中，彻底抹平了客户端的安全弱点。
-* [x] **白嫖防护拦截**：极客级引入 Cloudflare Global KV，在请求切面监听路由接入点提取物理连接网络 IP 达成防绕过封顶配额，实现免除发版破产焦虑的商用标准。
+### Sprint 5: Edge Cloud Computing & Gateway Security Layer ✅
+*   [x] **Infrastructure Great Migration**: Created a parallel microservice `cloudflare-worker`, and deployed it online to the external network (`wake-up-dude-api.workers.dev`) with extremely high load interception throughput.
+*   [x] **Authentication Sandboxing**: The large model `GEMINI_API_KEY` is completely stripped and stored only in the Cloudflare Wrangler system encryption hardware, completely smoothing out the security weaknesses of the client.
+*   [x] **Free-riding Protection Interception**: Geek-level introduction of Cloudflare Global KV, extracting physical connection network IPs at the routing access point in the request aspect to achieve anti-bypass capped quotas, reaching the commercial standard of exempting from version release bankruptcy anxiety.
+
+---
+
+### Sprint 6: Alarm Engine Migration — From expo-notifications to @notifee/react-native ✅
+> **Cause:** After deep testing on real devices, it was found that `expo-notifications` has a fatal flaw: the notification system can only play static audio (`test_alarm.wav`) packaged at compile time, and cannot play dynamically generated AI audio at runtime when the screen is off / the App is killed. The playback callback of `expo-av` (`addNotificationReceivedListener`) is only triggered when the App is in the foreground, which means that after the user falls asleep and the phone screen turns off, the alarm can only play a fixed ringtone—completely violating the core product concept of "AI generating a unique wake-up voice every day".
+
+> **Solution:** Introduced the `@notifee/react-native` native alarm clock library, utilizing the Android system-level `AlarmManager.setAlarmClock()` API to completely bypass the Doze power-saving mode to achieve bottom-layer force-kill zero-second delay wake-up. On this basis, by injecting mandatory screen-on parameters such as `showWhenLocked` into the native Activity, and guiding users to turn on the "pop-up interface in the background" permission for deeply customized systems, perfect lock screen unlocking and locally pulling up the full-screen Modal for React Native JS audio playback closed loop were achieved. In addition, abandoned unstable background event listening and introduced an extremely solid `AppState` lifecycle polling verification mechanism to ensure atomic-level consistency of the home page state.
+
+*   [x] Installed `@notifee/react-native` and created Expo Config Plugin to inject `SCHEDULE_EXACT_ALARM` + `SYSTEM_ALERT_WINDOW` related permissions.
+*   [x] Rewrote `services/notification-service.ts`, thoroughly replacing `expo-notifications` scheduling with `AlarmType.SET_ALARM_CLOCK`.
+*   [x] Created a new full-screen alarm clock component `components/AlarmScreen.tsx`, used `Modal` + `AppState` lifecycle interception and overwrote frontend routing, and automatically looped AI audio when mounted.
+*   [x] Refactored `app/index.tsx` and `_layout.tsx` main screen logic, removed old listeners, and used `getDisplayedNotifications` to achieve debounce verification and active UI refresh in frozen and awakened states.
+*   [x] Rebuilt the Dev Client native package and conducted a zero-second snooze penetration wake-up final exam in screen-off/background/completely swiped-kill states.
+
+### Sprint 7.1: Status Bar Fix + Debug Logging System ✅
+> **Cause:** The built APK showed a white background + white font in the status bar area on Android devices, making it completely unreadable. Troubleshooting revealed that `edgeToEdgeEnabled: true` makes the system status bar transparent, while there are 3 conflicting `StatusBar` component overwrites in the code; in addition, the alarm clock notification is unstable in the overnight scenario (set at 8 am but not triggered), because Cloudflare is walled, VPN may disconnect after running for a long time, and the lack of persistent logs makes it impossible to troubleshoot afterwards.
+
+*   [x] **Dark Theme Unification**: `app.json` forces `userInterfaceStyle: "dark"`, `_layout.tsx` is unified as the only `<StatusBar style="light" />`, removing conflicting RN StatusBars in `index.tsx`.
+*   [x] **Persistent Debug Logs**: Added `debug_logs` table in `expo-sqlite`, providing `addDebugLog(tag, message, level)` API, logs are not lost when the app is killed.
+*   [x] **Full Link Log Coverage**: Implanted persistent logs in `notification-service.ts` (alarm scheduling/cancellation), `ai-service.ts` (Cloudflare request start -> response -> success/failure, including VPN/GFW network disconnection special detection), and `index.tsx` (Foreground Service lifecycle).
+*   [x] **Settings Debug Diagnostic Panel**: Added "View Scheduled Alarm Triggers" and "Debug Log Viewer" (full-screen Modal, reverse chronological order, colored level indicator bars).
+
+### Sprint 7.2: Global UI Refactoring (Visual Overhaul)
+> After confirming functional stability in Sprint 6, carry out a one-time visual upgrade for all pages. At this time, the component structure has been determined (main screen + full-screen alarm clock + history + settings), and the design language can be unified to avoid rework.
+
+*   [ ] Redesign the main screen (time picker, alarm button, status prompt area).
+*   [ ] Redesign the full-screen alarm page (lock screen wake-up interface, SwipeToStop visual upgrade).
+*   [ ] Redesign the history page and settings page.
+*   [ ] Unify the color system, typography, and animation specifications.
+
+### Sprint 7.3: Multimodal Advanced (Gemini 3.1 TTS + Lyria Music) ✅
+> **Cause**: With the launch of the more advanced 3.1 TTS model (better sound quality, supporting voice tags) and the Lyria 3 music generation model by the Gemini API, "Wake up dude" ushered in a leap in content form. Waking up is not limited to "toxic voices", but can also directly generate highly atmospheric 30-second exclusive music clips through large models.
+
+*   [x] **Architecture Broadening**: Opened up the full link fields of `AlarmType` (voice/music), involving database table changes (adding the `alarmType` field), UI component updates (popup options and list flag bits).
+*   [x] **Edge Extension**: Updated the Cloudflare Worker microservice to bypass multi-level TTS for music requests, directly orchestrated Prompts dynamically according to the persona to directionally request the `lyria-3-clip-preview` music managing engine, and transcoded the directly output MP3 audio to the device side. On this basis, the highly oppressive and dramatic music Prompts (covering epic symphonies, heavy metal rock, Hans Zimmer style war songs, and electronic swing) were further upgraded, completely activating the wake-up soul of the alarm clock.
+*   [x] **System Interface Professionalization**: Introduced a brand new settings picker, comprehensively stripped off the originally overly childish Emoji (🌸/👺/🎤) descriptions to meet the standard sense of high-end applications; perfected the mounting options for generation models such as `lyria-3-clip` and `lyria-3-pro`.
+
+### Sprint 8: Future Advanced Planning (Post-Launch)
+*   [ ] Access the weather API, inject real-time weather information into the AI Prompt context to add more geeky content variants.
+*   [ ] Access `expo-calendar`, automatically read the day's to-do items as wake-up torture materials (e.g., "There is a meeting at 10 am today, are you planning to be absent and get fired?").�免除发版破产焦虑的商用标准。
 
 ---
 

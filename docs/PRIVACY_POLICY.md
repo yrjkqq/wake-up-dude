@@ -1,39 +1,39 @@
-# Wake up dude 隐私政策
+# Wake up dude Privacy Policy
 
-**生效日期：** 2026年03月01日
+**Effective Date:** March 01, 2026
 
-欢迎您使用“Wake up dude”（以下简称“本应用”）。本应用是一款由 AI 驱动的智能叫醒闹钟工具。我们非常重视您的隐私，并致力于保护您的个人信息。本《隐私政策》将向您说明我们在您使用本应用时，如何收集、使用、存储及保护您的信息。
+Welcome to "Wake up dude" (hereinafter referred to as the "App"). This App is an AI-driven smart alarm clock tool. We highly value your privacy and are committed to protecting your personal information. This Privacy Policy will explain to you how we collect, use, store, and protect your information when you use this App.
 
-请您仔细阅读本隐私政策。当您点击“同意”或继续使用本应用时，即表示您已阅读、理解并接受本政策的全部内容。
-
----
-
-## 1. 我们收集的信息及使用方式
-
-为了向您提供核心的智能叫醒服务，本应用需要在极小必要范围内获取以下权限与数据：
-
-*   **本地通知权限 (Local Notifications)** 
-    为了在您设定的时间准确触发系统级通知以唤醒您，我们需要获取您设备的“读取与发送通知”权限。所有的闹钟调度计算（包括推算剩余时间）皆在您的设备**本地完成**。
-*   **网络访问权限 (Network & Proxy)**
-    当您设定一条新的闹钟时，我们需要将您的“设定的时间”和“所选的人设偏好设定”发送至受加密保护的大语言模型（Gemini）代理服务器，用于生成专属于您的叫醒文案和音频。这是应用运转的唯一联网行为。
-*   **存储权限与本地缓存 (SQLite & FileSystem)**
-    为了能让您在“历史记录”中回听您的特殊早安语音，本应用会在您手机的沙盒及 `wakeUpDude.db` 本地数据库中生成缓存文件（如 `.wav` 录音文件及对应的发疯文案）。**这些数据完全留存在您的物理设备上**，不会被恶意静默上传。
-
-## 2. 数据共享与云端处理
-
-*   **核心服务提供商**：本应用的语音和文本生成依赖于 Google API (Gemini 大语言模型)。我们会将经过脱敏处理的 prompt，发送至大模型网关以履行服务。我们在调用时已遵守该服务商针对 API 隐私的条规。
-*   **不作他用**：我们**绝不**将您的闹钟习惯、睡眠规律等使用频率数据出售或共享给任何无关的第三方广告商。
-
-## 3. 用户控制权与取消机制
-
-您随时可以通过本应用的底部导航栏，进入「设置 (Settings)」页面：
-*   **一键清空：** 我们为您提供了“清空所有本地历史语音和记录”的强硬选项。点击后，所有储存于本应用的 SQLite 记录以及底层沙盒音频文件将被永久物理删除，无法被恢复。
-*   **停用网络通信：** 若您在应用中关闭功能或在手机系统级撤销了应用的“通知”和“网络”权限，应用将无法连接至外部大模型，此时应用自身会断网降级，自动采用您的手机系统预置白噪音铃声进行唤醒，不影响基础休眠使用。
-
-## 4. 政策更新
-
-随着本应用的迭代（如后续版本加入的天气与日程同步权限），我们可能会适时修订本《隐私政策》。若有重大变更，我们将会在应用开启时，以弹出声明的形式向您发送通知，请您保持关注。
+Please read this Privacy Policy carefully. By clicking "Agree" or continuing to use this App, you indicate that you have read, understood, and accepted all the contents of this policy.
 
 ---
 
-*如果您对本隐私协议有任何疑问或遇到任何需要维权的问题，欢迎随时与开发者取得联系。*
+## 1. Information We Collect and How We Use It
+
+To provide you with the core smart alarm service, this App needs to obtain the following permissions and data within the absolute minimum necessary scope:
+
+*   **Local Notifications Permission** 
+    In order to accurately trigger system-level notifications at your set time to wake you up, we need to obtain your device's "read and send notifications" permission. All alarm scheduling calculations (including calculating the remaining time) are done **locally** on your device.
+*   **Network Access Permission (Network & Proxy)**
+    When you set a new alarm, we need to send your "set time" and "selected persona preferences" to an encrypted Large Language Model (Gemini) proxy server to generate your exclusive wake-up text and audio. This is the only networking behavior required for the App to function.
+*   **Storage Permission and Local Caching (SQLite & FileSystem)**
+    So that you can listen back to your special good morning voices in the "History", the App will generate cache files (such as `.wav` recording files and corresponding crazy text) in your phone's sandbox and the local `wakeUpDude.db` database. **These data remain entirely on your physical device** and will not be maliciously uploaded silently.
+
+## 2. Data Sharing and Cloud Processing
+
+*   **Core Service Provider**: The voice and text generation of this App relies on the Google API (Gemini Large Language Model). We will send the desensitized prompt to the large model gateway to perform the service. We have complied with the service provider's regulations regarding API privacy when calling it.
+*   **No Other Uses**: We **absolutely do not** sell or share your frequency of use data, such as your alarm habits and sleep patterns, with any unrelated third-party advertisers.
+
+## 3. User Control and Cancellation Mechanism
+
+You can access the "Settings" page at any time through the bottom navigation bar of the App:
+*   **One-Click Clear:** We provide you with a strict option to "Clear all local voice history and records". After clicking, all SQLite records stored in this App as well as the underlying sandbox audio files will be permanently physically deleted and cannot be recovered.
+*   **Disable Network Communication:** If you turn off the function in the App or revoke the "Notifications" and "Network" permissions of the App at the mobile system level, the App will be unable to connect to the external large model. At this time, the App itself will degrade offline and automatically use your phone's system default white noise ringtone to wake you up, without affecting basic sleep usage.
+
+## 4. Policy Updates
+
+As this App iterates (such as weather and schedule synchronization permissions added in subsequent versions), we may revise this Privacy Policy in due course. If there are significant changes, we will send you a notification in the form of a pop-up statement when the App opens. Please stay tuned.
+
+---
+
+*If you have any questions about this privacy agreement or encounter any issues requiring rights protection, please feel free to contact the developer at any time.*
