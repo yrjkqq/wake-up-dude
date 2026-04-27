@@ -18,14 +18,17 @@ notifee.onBackgroundEvent(async ({ type, detail }) => {
   if (type === EventType.PRESS || type === EventType.ACTION_PRESS) {
     addDebugLog('BGEvent', `Background event: type=${type}, notifId=${detail.notification?.id}`);
   }
-  // Reschedule alarm for next occurrence when triggered in background
+  
+  // Reschedule alarm for next occurrence ONLY if the user dismisses the notification
+  // (e.g. swiping it away from the system tray). 
+  // If they tap it or the full-screen intent launches, AlarmScreen will handle the reschedule.
   if (
-    (type === EventType.DELIVERED || type === EventType.PRESS) &&
+    type === EventType.DISMISSED &&
     detail.notification?.android?.category === 'alarm'
   ) {
     const aid = detail.notification.data?.alarmId;
     if (typeof aid === 'string') {
-      addDebugLog('BGEvent', `Alarm ${aid} triggered in background (type=${type}), initiating reschedule`);
+      addDebugLog('BGEvent', `Alarm ${aid} dismissed in background (type=${type}), initiating reschedule`);
       await rescheduleAlarm(parseInt(aid, 10));
     }
   }

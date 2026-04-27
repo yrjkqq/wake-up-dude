@@ -156,7 +156,7 @@ export async function scheduleAlarm(alarm: Alarm): Promise<void> {
       },
       genTrigger
     );
-    addDebugLog('Schedule', `Alarm ${alarm.id}: AI gen trigger scheduled at ${genTriggerDate.toLocaleTimeString()} (id: gen_${alarm.id}_${genTimestamp})`);
+    addDebugLog('Schedule', `Alarm ${alarm.id}: AI gen trigger scheduled at ${genTriggerDate.toLocaleString()} (id: gen_${alarm.id}_${genTimestamp})`);
   }
 
   // 2. Schedule Actual Alarm Trigger (Loud)
@@ -196,7 +196,7 @@ export async function scheduleAlarm(alarm: Alarm): Promise<void> {
   // Verify triggers were actually registered with the OS
   const registeredIds = await notifee.getTriggerNotificationIds();
   const thisAlarmTriggers = registeredIds.filter(id => id.includes(alarm.id.toString()));
-  addDebugLog('Schedule', `✅ Alarm ${alarm.id} (${alarm.time}) fully scheduled. Registered triggers: [${thisAlarmTriggers.join(', ')}]. Trigger: ${triggerDate.toISOString()}, AI Gen: ${genTriggerDate.toISOString()}`);
+  addDebugLog('Schedule', `✅ Alarm ${alarm.id} (${alarm.time}) fully scheduled. Registered triggers: [${thisAlarmTriggers.join(', ')}]. Trigger: ${triggerDate.toLocaleString()}, AI Gen: ${genTriggerDate.toLocaleString()}`);
 }
 
 /**
